@@ -1,0 +1,43 @@
+{
+  "name": "is-radar",
+  "private": true,
+  "version": "0.3.0",
+  "description": "LinkedIn iş ilanlarını hesapsız toplayan, kural motoru + Claude ile kişiye göre skorlayan lokal iş radarı (Node + SQLite + React). Login-free LinkedIn job radar with rule-based prescreen and Claude scoring.",
+  "type": "module",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "init": "node --experimental-strip-types --no-warnings=ExperimentalWarning src/index.ts init",
+    "serve": "node --experimental-strip-types --no-warnings=ExperimentalWarning src/index.ts serve",
+    "run": "node --experimental-strip-types --no-warnings=ExperimentalWarning src/index.ts run",
+    "score": "node --experimental-strip-types --no-warnings=ExperimentalWarning src/index.ts score",
+    "research": "node --experimental-strip-types --no-warnings=ExperimentalWarning src/index.ts research",
+    "import": "node --experimental-strip-types --no-warnings=ExperimentalWarning src/index.ts import",
+    "reset": "node --experimental-strip-types --no-warnings=ExperimentalWarning src/index.ts reset",
+    "doctor": "node --experimental-strip-types --no-warnings=ExperimentalWarning src/index.ts doctor",
+    "cv-review": "node --experimental-strip-types --no-warnings=ExperimentalWarning src/index.ts cv-review",
+    "criteria-review": "node --experimental-strip-types --no-warnings=ExperimentalWarning src/index.ts criteria-review",
+    "build": "vite build",
+    "dev": "vite build --watch",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.dashboard.json",
+    "test": "node --experimental-strip-types --no-warnings=ExperimentalWarning test/parsers.test.ts && node --experimental-strip-types --no-warnings=ExperimentalWarning test/prescreen.test.mjs && node --experimental-strip-types --no-warnings=ExperimentalWarning test/pipeline.test.ts && node --experimental-strip-types --no-warnings=ExperimentalWarning test/db.test.ts",
+    "check": "npm run typecheck && npm test && npm run build"
+  },
+  "dependencies": {
+    "cheerio": "^1.0.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "yaml": "^2.6.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.0"
+  },
+  "license": "MIT"
+}

@@ -1,0 +1,100 @@
+# İş Radar collector — aramalar. Her arama LinkedIn misafir ucundan sayfalanır.
+# DİKKAT: misafir arama çalışma şekli filtresini (f_WT) YOK SAYAR ve kartlarda çalışma şekli etiketi YOKTUR
+# (2026-09'da doğrulandı: uzaktan/hibrit/iş yerinde üçü de aynı ilanları döndürüyor). Bu yüzden burada f_WT yok;
+# remote/hibrit/ofis ayrımını ilan metninden kural motoru ve LLM yapar. Lokasyonu şehirsiz ("Türkiye") olan
+# ilanlar genelde remote'tur, kural motoru bunu ipucu olarak kullanır.
+# Tur modları: ilk tur (ya da `npm run run -- --full` / dashboard "Tam tur") full; sonrası her zamanlayıcı
+# tikinde incremental. f_TPR LinkedIn URL'sindeki zaman filtresi: r3600 = son 1 saat, r86400 = 1 gün, r604800 = 7 gün,
+# r2592000 = 30 gün. incremental.f_TPR "auto" = son tamamlanmış turun başlangıcından beri geçen süre + 1 saat; tabanı
+# zamanlayıcı aralığının 2 katı (180 dk → 6 saat), tavanı 30 gün. Gece susulan saatler böylece sabahki turda kapanır.
+# Artımlı turda bir sayfa tamamen bilinen ilanlardan oluşuyorsa o aramada sayfalama durur.
+# Kişiye göre kural motoru / prompt ayarı. Hepsi isteğe bağlı; yoksa yerleşik varsayılanlar (aşağıdaki değerler).
+# Değiştirince ön elemeler bir sonraki turda kendiliğinden yeniden hesaplanır.
+radar:
+  home_cities: [Ankara, İzmir, Manisa, Aydın]   # ilk şehir birincil (+ en yüksek hibrit bonusu); ofise gidilebilecek şehirler
+  accept_hybrid: true
+  thresholds: { review: 35, candidate: 60 }   # kural puanı eşikleri; Sistem → Kalibrasyon kartı veriye göre önerir ve uygular
+  # Rol sözlükleri: başlık bu ifadelerden birini içeriyorsa o kademe. Bir liste verirsen o kademenin yerleşik
+  # sözlüğünün YERİNE geçer (boş bırak = yerleşik). core = hedef rol, adjacent = yakın rol, bridge = köprü,
+  # mismatch = başlık kapısında elenir. Başka bir rol ailesi arıyorsan (ör. yazılımcı) sadece burayı değiştir.
+  # roles:
+  #   core: ["business analyst", "iş analisti", "product owner", "ürün sahibi", "product manager", "ürün yöneticisi", "product analyst"]
+  #   adjacent: ["proje yöneticisi", "project manager", "sistem analisti", "solution consultant"]
+  #   mismatch: ["technical support", "teknik destek", "çağrı merkezi", "satış", "software developer"]
+  # Skor = Claude'un içerik uyumu (0-100) + aşağıdaki kurallar. Sadece değiştirmek istediğini yaz; tam liste ve
+  # varsayılanlar src/shared/scoring.ts → DEFAULT_WEIGHTS. Ayarlar → Radar → Skor ağırlıkları da buraya yazar.
+  # Değişince eski skorlar Claude'a sormadan yeniden hesaplanır.
+  # score_weights:
+  #   remote: 10               # tam remote bonusu
+  #   onsite_home_cap: 70      # kabul edilen şehirde tam ofis: skor tavanı
+  #   english_spoken: -12      # her gün sözlü İngilizce
+
+# Şirket kariyer panoları (isteğe bağlı): Greenhouse / Lever / Ashby'nin herkese açık JSON uçları. Login yok,
+# LinkedIn'in 429'undan bağımsız. Sadece hedef rol başlıkları + Türkiye / kabul edilen şehir / uygun remote tutulur.
+# board = panonun adı: jobs.lever.co/<board>, boards.greenhouse.io/<board>, jobs.ashbyhq.com/<board>. Şirketin
+# kariyer sayfasındaki "Apply" linkinden bulunur; tahmin etme, aynı ad başka şirkete ait olabiliyor.
+# companies:
+#   - { name: Trendyol, ats: lever, board: trendyol }        # doğrulandı 2026-09
+#   - { name: Örnek A.Ş., ats: greenhouse, board: ornek }
+#   - { name: Örnek, ats: ashby, board: ornek }
+
+modes:
+  full:
+    f_TPR: r2592000       # 30 gün
+    max_pages: 8          # 8 sayfa x ~10 kart / arama (~3.000 kart tavanı; 429 gelirse 4-6 yap)
+  incremental:
+    f_TPR: auto
+    max_pages: 3
+
+defaults:
+  f_TPR: r604800        # (eski alan; modes.full yoksa kullanılır)
+  max_pages: 4
+  detail_budget: 120    # tur başına en fazla bu kadar ilanın metni çekilir (yeniden eskiye)
+
+searches:
+  # ---- Ankara (öncelikli şehir) ----
+  - { keywords: "business analyst", location: "Ankara, Türkiye" }
+  - { keywords: "iş analisti", location: "Ankara, Türkiye" }
+  - { keywords: "iş analizi", location: "Ankara, Türkiye" }
+  - { keywords: "product owner", location: "Ankara, Türkiye" }
+  - { keywords: "product manager", location: "Ankara, Türkiye" }
+  - { keywords: "product analyst", location: "Ankara, Türkiye" }
+  - { keywords: "ürün uzmanı", location: "Ankara, Türkiye" }
+  - { keywords: "ürün yöneticisi", location: "Ankara, Türkiye" }
+
+  # ---- Türkiye geneli (remote ilanlar çoğunlukla burada, lokasyonu şehirsiz gelir) ----
+  - { keywords: "business analyst", location: "Türkiye" }
+  - { keywords: "iş analisti", location: "Türkiye" }
+  - { keywords: "iş analizi", location: "Türkiye" }
+  - { keywords: "product owner", location: "Türkiye" }
+  - { keywords: "ürün sahibi", location: "Türkiye" }
+  - { keywords: "product manager", location: "Türkiye" }
+  - { keywords: "ürün yöneticisi", location: "Türkiye" }
+  - { keywords: "product analyst", location: "Türkiye" }
+  - { keywords: "ürün analisti", location: "Türkiye" }
+  - { keywords: "ürün uzmanı", location: "Türkiye" }
+  - { keywords: "product specialist", location: "Türkiye" }
+  - { keywords: "sistem analisti", location: "Türkiye" }
+  - { keywords: "solution consultant", location: "Türkiye" }
+
+  # ---- İzmir / Manisa / Aydın (kabul edilen şehirler) ----
+  - { keywords: "business analyst", location: "İzmir, Türkiye" }
+  - { keywords: "iş analisti", location: "İzmir, Türkiye" }
+  - { keywords: "product owner", location: "İzmir, Türkiye" }
+  - { keywords: "product manager", location: "İzmir, Türkiye" }
+  - { keywords: "product analyst", location: "İzmir, Türkiye" }
+  - { keywords: "ürün uzmanı", location: "İzmir, Türkiye" }
+  - { keywords: "business analyst", location: "Manisa, Türkiye" }
+  - { keywords: "iş analisti", location: "Manisa, Türkiye" }
+  - { keywords: "product owner", location: "Manisa, Türkiye" }
+  - { keywords: "product manager", location: "Manisa, Türkiye" }
+  - { keywords: "ürün uzmanı", location: "Manisa, Türkiye" }
+  - { keywords: "business analyst", location: "Aydın, Türkiye" }
+  - { keywords: "iş analisti", location: "Aydın, Türkiye" }
+  - { keywords: "product owner", location: "Aydın, Türkiye" }
+  - { keywords: "product manager", location: "Aydın, Türkiye" }
+  - { keywords: "ürün uzmanı", location: "Aydın, Türkiye" }
+
+schedule:
+  every_minutes: 180
+  active_hours: [7, 23]   # yerel saat; bu aralık dışında tur atmaz

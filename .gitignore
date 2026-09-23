@@ -1,0 +1,12 @@
+node_modules/
+public/
+dist/
+data/
+!data/.gitkeep
+.env
+searches.yaml
+profile/cv.md
+profile/criteria.md
+profile/about.md
+*.log
+.DS_Store
