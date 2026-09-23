@@ -74,6 +74,9 @@ export function loadSearches(): SearchesConfig {
     home_cities: list(rr.home_cities),
     accept_hybrid: typeof rr.accept_hybrid === 'boolean' ? rr.accept_hybrid : undefined,
     roles: rr.roles ? { core: list(rr.roles.core), adjacent: list(rr.roles.adjacent), bridge: list(rr.roles.bridge), mismatch: list(rr.roles.mismatch) } : undefined,
+    bonus: list(rr.bonus),
+    salary_min_tl: rr.salary_min_tl === undefined ? undefined : Number(rr.salary_min_tl),
+    onsite_ok: typeof rr.onsite_ok === 'boolean' ? rr.onsite_ok : undefined,
     score_weights: rr.score_weights && typeof rr.score_weights === 'object' ? Object.fromEntries(Object.entries(rr.score_weights).map(([k, v]) => [k, Number(v)])) : undefined,
     thresholds: rr.thresholds ? { review: rr.thresholds.review === undefined ? undefined : Number(rr.thresholds.review), candidate: rr.thresholds.candidate === undefined ? undefined : Number(rr.thresholds.candidate) } : undefined,
   }

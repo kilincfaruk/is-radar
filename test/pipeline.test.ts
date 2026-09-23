@@ -124,6 +124,30 @@ check('location: Turkey / accepted city / remote EMEA ok; Berlin office no', loc
 check('title: role family only', titleOk('Senior Business Analyst') && titleOk('Ürün Yöneticisi') && !titleOk('Abuse Investigator') && !titleOk('Software Engineer'))
 check('atsId safe', atsId('lever', 'Acme Co', 'X/1') === 'lever-acme-co-x-1')
 
+// ---- another role family (radar.roles.core set): quality control engineer, office work is the norm
+configurePrescreen({
+  home_cities: ['Ankara', 'Kocaeli', 'Eskişehir'],
+  roles: { core: ['kalite kontrol mühendisi', 'quality engineer', 'kalite mühendisi'], adjacent: ['metalurji mühendisi', 'kaynak mühendisi'], bridge: ['üretim mühendisi'], mismatch: ['yazılım', 'software', 'satış'] },
+  bonus: ['AS9100', 'savunma'],
+  salary_min_tl: 0,
+  onsite_ok: true,
+})
+check('family: QC titles pass the gate', titleGate('Kalite Kontrol Mühendisi') === null && titleGate('Kaynak Mühendisi (Üretim)') === null && titleGate('Üretim Mühendisi') === null)
+check('family: exclusions win over core words', titleGate('Software Quality Engineer') !== null && detectRole('Software Quality Engineer', '').role === 'mismatch')
+check('family: unrelated title gated, BA heuristics off', titleGate('Business Analyst') === 'başlık hedef dışı' && titleGate('Muhasebe Uzmanı') === 'başlık hedef dışı')
+const qc = (loc: string, extra = '') => prescreen({ title: 'Kalite Kontrol Mühendisi', descriptionMd: 'Savunma sanayi projelerinde giriş, ara ve son kontrol. AS9100 bilgisi. En az 2 yıl deneyim. ' + extra + ' '.repeat(10), workplaceType: 'unknown', location: loc })!
+check('family: silent text in primary city is not capped (onsite normal)', qc('Ankara, Türkiye').score >= 60 && qc('Ankara, Türkiye').verdict === 'candidate', qc('Ankara, Türkiye'))
+check('family: silent text outside accepted cities → reject', qc('İstanbul, Türkiye').verdict === 'reject', qc('İstanbul, Türkiye').score)
+check('family: custom bonus replaces BA list', qc('Ankara').bonuses.includes('AS9100') && qc('Ankara').bonuses.includes('savunma') && !qc('Ankara', 'SQL Jira').bonuses.includes('SQL'))
+check('family: salary floor off', !qc('Ankara', 'Maaş: 40.000 TL net').flags.some((f) => /maaş/.test(f)))
+check('scoring: primary-city office bonus + silent other city cap', computeScore({ ...F, workplace: 'onsite_ankara', fit: 70 }, {}, { ...WEIGHTS, onsite_primary: 8, onsite_home_cap: 100 }).score === 78 && computeScore({ ...F, workplace: 'unknown', fit: 80 }, { location: 'İstanbul' }, { ...WEIGHTS, unknown_other_city_cap: 25 }).score === 25 && computeScore({ ...F, workplace: 'unknown', fit: 80 }, { location: 'Kocaeli' }, { ...WEIGHTS, unknown_city_cap: 100 }).score === 80)
+check('family: word order and suffixes tolerated', titleGate('Kalite Güvence & Kontrol Mühendisi') === null && titleGate('Ürün Kalitesi Mühendisi') === null && titleGate('KALİTE KONTROL MÜHENDİSİ') === null)
+check('family: gate reason names the excluding phrase', titleGate('Software Quality Assurance Engineer') === 'başlık: software')
+check('district counts as its city', matchHomeCity('Sincan', ['Ankara']) === 'Ankara' && matchHomeCity('Kahramankazan, Ankara', ['Ankara']) === 'Ankara' && matchHomeCity('Gebze', ['Ankara', 'Kocaeli']) === 'Kocaeli')
+check('district match is whole-word (Selçuklu ≠ Selçuk)', matchHomeCity('Selçuklu', ['İzmir']) === null && matchHomeCity('Selçuk', ['İzmir']) === 'İzmir' && matchHomeCity('Kadıköy', ['Ankara']) === null)
+configurePrescreen(null)
+check('family: reset restores BA gate', titleGate('Business Analyst') === null && titleGate('Kalite Kontrol Mühendisi') !== null)
+
 // ---- cv tips markdown
 const md = tipsToMarkdown({ fit_line: 'x', foreground: ['a'], rewrites: [{ original: 'o', suggested: 's', why: 'w' }], missing: [], avoid: ['z'] })
 check('tips markdown sections', md.includes('**Konumlanma:** x') && md.includes('~~o~~') && md.includes('→ s') && !md.includes('İlanda var') && md.includes('**Geri çek**'))

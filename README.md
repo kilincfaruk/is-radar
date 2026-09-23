@@ -30,7 +30,7 @@ bir dashboard'da gösteren tek kişilik iş radarı. Backend yok, deploy yok: he
 
 Tasarım notu: [`docs/BUILD_SPEC_V3_COLLECTOR.md`](docs/BUILD_SPEC_V3_COLLECTOR.md). Lisans: MIT.
 
-**Kimin için:** Türkiye'de BA / PO / PM / ürün analisti arayan biri için yazıldı. Rol sözlükleri ve kabul edilen
+**Kimin için:** Türkiye'de BA / PO / PM / ürün analisti arayan biri için yazıldı; başka bir meslek için `searches.yaml` → `radar.roles.core` doldurulunca BA/PO'ya özgü başlık filtreleri kapanır (örnek: kalite kontrol mühendisi, `onsite_ok: true`). Rol sözlükleri ve kabul edilen
 şehirler `searches.yaml` → `radar:` bloğundan değiştirilir (başlık kapısındaki genel "alakasız" listesi kodda);
 skorlama prompt'u tamamen `profile/` dosyalarından beslenir.
 

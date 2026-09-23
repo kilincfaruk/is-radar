@@ -21,6 +21,13 @@ radar:
   #   core: ["business analyst", "iş analisti", "product owner", "ürün sahibi", "product manager", "ürün yöneticisi", "product analyst"]
   #   adjacent: ["proje yöneticisi", "project manager", "sistem analisti", "solution consultant"]
   #   mismatch: ["technical support", "teknik destek", "çağrı merkezi", "satış", "software developer"]
+  # Başka bir meslek için (ör. kalite kontrol mühendisi, muhasebeci): roles.core'u doldur. core doluysa BA/PO'ya göre
+  # yazılmış yerleşik başlık filtreleri kapanır, sadece bu sözlükler geçerli olur; önce mismatch'e bakılır. İfadedeki
+  # kelimeler başlıkta sırası fark etmeden ve Türkçe ekleriyle aranır ("kalite mühendisi" → "Ürün Kalitesi Mühendisi").
+  # onsite_ok: true       # iş yerinde çalışmak bu meslekte normal (üretim, saha): kabul edilen şehirde ofis cezası yok
+  # salary_min_tl: 90000  # maaşı yazan ilanda bu rakamın altı cezalı; 0 = kapalı
+  # bonus: ["savunma", "as9100"]   # kural motorunun +5 bonus kelimeleri; yerleşik listenin yerine geçer
+  # LinkedIn bazen lokasyona sadece ilçe yazar ("Sincan", "Gebze"): büyük şehirlerin ilçeleri şehir sayılır.
   # Skor = Claude'un içerik uyumu (0-100) + aşağıdaki kurallar. Sadece değiştirmek istediğini yaz; tam liste ve
   # varsayılanlar src/shared/scoring.ts → DEFAULT_WEIGHTS. Ayarlar → Radar → Skor ağırlıkları da buraya yazar.
   # Değişince eski skorlar Claude'a sormadan yeniden hesaplanır.

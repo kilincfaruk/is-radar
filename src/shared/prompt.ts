@@ -16,28 +16,25 @@ bonus KATMA; onları sadece ilgili alana doğru yaz. SADECE JSON döneceksin, ba
 1. FIT (0-100): Bu işin İÇERİĞİ bu adaya ne kadar uyuyor? Üç şeye bak:
    (a) rolün gerçek içeriği, başlığa değil görev tanımına göre (ADAYIN KRİTERLERİ'ndeki hedef roller),
    (b) adayın geçmişi ve hedefi (CV ve varsa ADAY HAKKINDA: sevdiği / sevmediği iş, geçiş hikâyesi),
-   (c) ilan ve şirket kalitesi (net görev tanımı, ürün şirketi mi, kriterlerdeki "Tercih (bonus)" listesi,
+   (c) ilan ve işveren kalitesi (net görev tanımı, işin niteliği, kriterlerdeki "Tercih (bonus)" listesi,
        adayın CV'sindeki alanlarla örtüşen sektör).
    Ölçek:
    90-100  tam hedef rol, içerik adayın hedefi ve geçmişiyle birebir, şirket/ürün çekici. Nadir olmalı.
    75-89   hedef ya da yakın rol, içerik büyük ölçüde uyuyor.
    60-74   uyuyor ama belirgin fark var (dar kapsam, sektör bilgisi şartı, belirsiz görev tanımı).
    40-59   köprü rol ya da içerik zayıf örtüşüyor.
-   0-39    uyumsuz rol: gizli support, satış, yazılım geliştirme, üretim/inşaat projesi vb.
-   ROL GENİŞLİĞİ ARTIDIR: BA + proje yönetimi + test karışımı, küçük ekipte çok şapkalı roller adayı çeker.
-   SEKTÖR TEK BAŞINA ELEME DEĞİL: savunma, kamu, banka, e-ticaret, oyun, sigorta...
+   0-39    uyumsuz rol: ADAYIN KRİTERLERİ'ndeki "Elenen" roller ya da hedef aileyle ilgisi olmayan iş.
+   SEKTÖR TEK BAŞINA ELEME DEĞİL (kriterler aksini söylemedikçe).
    Başvuru sayısı sinyal değildir. Cömert davranma.
 
-2. ROLE_FIT. Hedef roller ve geçiş hikâyesi ADAYIN KRİTERLERİ ve ADAY HAKKINDA bölümlerindedir; oradaki tanım
-   buradakinden farklıysa oradaki geçerli. Varsayılan aile:
-   - core: Business Analyst, Product Owner, Product Manager, Product Analyst
-   - adjacent: yazılım ürünü için Proje Yöneticisi / Project Manager / Proje Uzmanı, Technical Business
-     Analyst, Solution / Implementation Consultant, Product Support Analyst, Sistem Analisti.
-     (Üretim/inşaat/enerji tesisi proje yöneticiliği adjacent DEĞİL, mismatch.)
-   - bridge: içinde analiz/ürün sorumluluğu olan ama ağırlığı destek/operasyon/test olan roller. Test/QA bridge'dir.
-   - mismatch: saf technical support, çağrı merkezi, saha destek, satış, yazılım geliştirme.
-   BAŞLIĞA ALDANMA: "Business Analyst" başlıklı ama işi ticket çözmek olan ilan mismatch'tir; red_flags'e
-   "gizli support rolü" yaz.
+2. ROLE_FIT. Hedef rol ailesi ADAYIN KRİTERLERİ'ndeki "Roller" bölümündedir (core / adjacent / bridge / elenen).
+   Kriterler bir rol ailesi tanımlıyorsa SADECE onu kullan; aşağıdaki varsayılanı tamamen yok say.
+   Varsayılan aile (kriterler rol tanımlamıyorsa): core = Business Analyst, Product Owner, Product Manager,
+   Product Analyst · adjacent = yazılım ürünü için proje yöneticisi, technical BA, solution / implementation
+   consultant, sistem analisti · bridge = içinde analiz/ürün sorumluluğu olan destek/operasyon/test rolleri ·
+   mismatch = saf teknik destek, çağrı merkezi, satış, yazılım geliştirme.
+   BAŞLIĞA ALDANMA: başlık hedef rol ama görev tanımı başka bir iş ise (ör. "Business Analyst" başlıklı ticket çözme,
+   "Kalite Mühendisi" başlıklı yazılım test otomasyonu) rol görev tanımına göre belirlenir; red_flags'e yaz.
 
 3. SENIORITY_FIT (adayın tecrübesi CV'den ya da kriterlerden):
    under = stajyer/yeni mezun hedefli · match = 1-4 yıl · stretch = 5-7 yıl · over = 8+ yıl ya da senior/lead beklentisi.
@@ -68,7 +65,7 @@ bonus KATMA; onları sadece ilgili alana doğru yaz. SADECE JSON döneceksin, ba
 
 9. METİN ALANLARI. summary: en fazla 2 cümle Türkçe, ilan ne ve bu adaya neden uyuyor/uymuyor.
    reasons.pros / reasons.cons: en fazla 4'er kısa madde, genel değil BU adaya göre (ADAY HAKKINDA varsa onun sözleriyle).
-   red_flags: gizli support rolü, abartılı kültür dili + maaş yok, adayın "kesin hayır" dedikleri.
+   red_flags: başlığıyla uyuşmayan görev tanımı, abartılı kültür dili + maaş yok, adayın "kesin hayır" dedikleri.
    Ceza/bonus hesabını maddelere yazma ("skoru 10 düşürdüm" gibi); kod hesaplıyor.
 
 JSON şeması:

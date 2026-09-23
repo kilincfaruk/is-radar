@@ -12,7 +12,7 @@ export type PreRemote = 'verified' | 'hybrid' | 'onsite' | 'unknown'
 /** Where the workplace verdict came from: the ad text (verified) or only LinkedIn's label. */
 export type PreRemoteSource = 'text' | 'label'
 /** Bump when rules change so stored pre_json rows get recomputed by the collector. */
-export const PRESCREEN_VERSION = 7
+export const PRESCREEN_VERSION = 8
 
 /**
  * Cities where hybrid/onsite is acceptable without relocating; the first one is the primary (highest bonus).
@@ -33,7 +33,16 @@ export type RadarConfig = {
   roles?: { core?: string[]; adjacent?: string[]; bridge?: string[]; mismatch?: string[] }
   /** Overrides for the deterministic score weights (src/shared/scoring.ts DEFAULT_WEIGHTS). */
   score_weights?: Record<string, number>
+  /** Phrases that earn the rule engine's +5 bonus. A non-empty list REPLACES the built-in (BA/PO-oriented) list. */
+  bonus?: string[]
+  /** Salary figure (TL) below which an ad that states its salary is penalised. 0 = off. Default 90000. */
+  salary_min_tl?: number
+  /** Office work in an accepted city is the norm for this role family (field / production jobs): no cap for it. */
+  onsite_ok?: boolean
 }
+
+/** Live options derived from the radar block (mutated by configurePrescreen). */
+export const RADAR = { customFamily: false, salaryMinTl: 90_000, onsiteOk: false, bonus: null as Array<{ rx: RegExp; label: string }> | null }
 
 /** Verdict cut-offs on the rule score (mutable via configurePrescreen). */
 export const THRESHOLDS = { review: 35, candidate: 60 }
@@ -42,13 +51,31 @@ export function verdictFor(score: number, t: { review: number; candidate: number
   return score < t.review ? 'reject' : score < t.candidate ? 'review' : 'candidate'
 }
 
-/** "product owner" → /product\s*owner/ etc.; matched against the case-folded title. */
+const WB = '(?:^|[^a-z0-9çğıöşü])'
+
+/**
+ * A phrase from the yaml → regex over the case-folded title. Every word of the phrase must start a word in the title,
+ * in any order, with Turkish suffixes tolerated: "kalite kontrol mühendisi" matches "Kalite Güvence & Kontrol
+ * Mühendisi", "kalite mühendisi" matches "Ürün Kalitesi Mühendisi". A word keeps its first max(4, len-2) letters.
+ */
 export function phrasesToRegex(phrases: string[]): RegExp {
   const alts = phrases
     .map((x) => fold(x).trim())
     .filter(Boolean)
-    .map((x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s*'))
-  return new RegExp(alts.length ? alts.join('|') : '(?!)', 'i')
+    .map((x) =>
+      x
+        .split(/\s+/)
+        .map((w) => w.slice(0, Math.max(Math.min(w.length, 4), w.length - 2)))
+        .map((w) => `(?=.*${WB}${w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`)
+        .join(''),
+    )
+  return new RegExp(alts.length ? alts.map((a) => `^${a}`).join('|') : '(?!)', 'i')
+}
+
+/** Which yaml phrase of a tier hit the title (for readable gate reasons). */
+const ROLE_PHRASES: Partial<Record<'core' | 'adjacent' | 'bridge' | 'mismatch', Array<{ label: string; rx: RegExp }>>> = {}
+function phraseHit(tier: 'core' | 'adjacent' | 'bridge' | 'mismatch', t: string): string | undefined {
+  return ROLE_PHRASES[tier]?.find((p) => p.rx.test(t))?.label
 }
 
 /** Apply user config. Safe to call repeatedly (settings save); restores a tier's default when its list is emptied. */
@@ -63,7 +90,16 @@ export function configurePrescreen(cfg: RadarConfig | null | undefined): void {
   for (const tier of ['core', 'adjacent', 'bridge', 'mismatch'] as const) {
     const list = cfg?.roles?.[tier]
     ROLE[tier] = list && list.length ? phrasesToRegex(list) : DEFAULT_ROLE[tier]
+    ROLE_PHRASES[tier] = list && list.length ? list.map((l) => ({ label: String(l), rx: phrasesToRegex([String(l)]) })) : undefined
   }
+  // a custom core list means another role family: the BA/PO title heuristics (junk list, "plausible" words,
+  // domain exclusions) no longer apply, only the yaml dictionaries decide
+  RADAR.customFamily = !!cfg?.roles?.core?.length
+  const sm = Number(cfg?.salary_min_tl)
+  RADAR.salaryMinTl = cfg?.salary_min_tl === undefined || !Number.isFinite(sm) ? 90_000 : Math.max(0, sm)
+  RADAR.onsiteOk = cfg?.onsite_ok === true
+  const bonus = (cfg?.bonus ?? []).map((b) => String(b).trim()).filter(Boolean)
+  RADAR.bonus = bonus.length ? bonus.map((b) => ({ rx: phrasesToRegex([b]), label: b })) : RADAR.customFamily ? [] : null
 }
 const DEFAULT_HOME_CITIES = [...HOME_CITIES]
 
@@ -216,6 +252,13 @@ export function titleGate(titleIn: string): string | null {
   // "Bangkok-based", "Dubai-based": the job sits abroad whatever the LinkedIn location says
   if (/\b(?!(ankara|izmir|manisa|aydın|istanbul|türkiye|turkey|remote|home|tr)-)[a-zçğıöşü]+-based\b/.test(t)) return 'başlık: yurt dışı lokasyon'
   if (/\b(bangkok|dubai|riyadh|riyad|doha|cairo|kahire|berlin|london|londra|amsterdam|paris|warsaw|varşova|bucharest|bükreş|singapore|singapur)\b/.test(t)) return 'başlık: yurt dışı lokasyon'
+  if (RADAR.customFamily) {
+    // another role family (radar.roles.core set in the yaml): exclusions first, then only the dictionaries
+    if (ROLE.mismatch.test(t)) return 'başlık: ' + (phraseHit('mismatch', t) ?? 'alakasız rol')
+    if (RX.intern.test(t)) return 'başlık stajyer/yeni mezun'
+    if (ROLE.core.test(t) || ROLE.adjacent.test(t) || ROLE.bridge.test(t)) return null
+    return 'başlık hedef dışı'
+  }
   // always keep the target roles, whatever else the title says
   if (ROLE.core.test(t) || ROLE.adjacent.test(t)) {
     if (RX.managerial.test(t) && !RX.pmTitle.test(t)) return 'başlık yöneticilik'
@@ -228,7 +271,7 @@ export function titleGate(titleIn: string): string | null {
     if (!ROLE.core.test(t) && domain.test(t)) return 'başlık: ' + (t.match(domain)?.[0] ?? 'alakasız alan')
     return null
   }
-  if (ROLE.mismatch.test(t)) return 'başlık: ' + (t.match(ROLE.mismatch)?.[0] ?? 'alakasız rol')
+  if (ROLE.mismatch.test(t)) return 'başlık: ' + (t.match(ROLE.mismatch)?.[0] || phraseHit('mismatch', t) || 'alakasız rol')
   if (RX.managerial.test(t)) return 'başlık yöneticilik'
   if (RX.intern.test(t)) return 'başlık stajyer/yeni mezun'
   const junk =
@@ -245,7 +288,7 @@ export function titleGate(titleIn: string): string | null {
 /** True when the title explicitly hits a core / adjacent / bridge phrase (detectRole falls back to 'bridge' for anything). */
 export function titleInRoleFamily(titleIn: string): boolean {
   const t = fold(titleIn)
-  if (ROLE.mismatch.test(t) && !ROLE.core.test(t)) return false
+  if (ROLE.mismatch.test(t) && (RADAR.customFamily || !ROLE.core.test(t))) return false
   return ROLE.core.test(t) || ROLE.adjacent.test(t) || ROLE.bridge.test(t)
 }
 
@@ -253,7 +296,8 @@ export function detectRole(titleIn: string, descriptionIn: string): { role: Role
   const t = fold(titleIn)
   const description = fold(descriptionIn)
   let role: RoleFit
-  if (ROLE.core.test(t) && !/technical\s*business\s*analyst|teknik\s*iş\s*analisti/i.test(t)) role = 'core'
+  if (RADAR.customFamily && ROLE.mismatch.test(t)) role = 'mismatch'
+  else if (ROLE.core.test(t) && !/technical\s*business\s*analyst|teknik\s*iş\s*analisti/i.test(t)) role = 'core'
   else if (ROLE.adjacent.test(t)) role = 'adjacent'
   else if (ROLE.mismatch.test(t)) role = 'mismatch'
   else if (ROLE.bridge.test(t)) role = 'bridge'
@@ -291,10 +335,35 @@ export function detectRemote(description: string, workplaceType: Job['workplaceT
 }
 
 /** Returns the accepted city found in the location, or null. */
+/**
+ * LinkedIn often gives only the district ("Sincan", "Gebze", "Nilüfer"). Districts of the cities people most often
+ * list; matched as whole words so İzmir's "Selçuk" does not catch Konya's "Selçuklu".
+ */
+const DISTRICTS: Record<string, string[]> = {
+  ankara: ['akyurt', 'altındağ', 'ayaş', 'bala', 'beypazarı', 'çamlıdere', 'çankaya', 'çubuk', 'elmadağ', 'etimesgut', 'evren', 'gölbaşı', 'güdül', 'haymana', 'kahramankazan', 'kazan', 'kalecik', 'keçiören', 'kızılcahamam', 'mamak', 'nallıhan', 'polatlı', 'pursaklar', 'sincan', 'şereflikoçhisar', 'yenimahalle', 'ostim', 'ivedik', 'bilkent', 'odtü teknokent'],
+  izmir: ['aliağa', 'balçova', 'bayındır', 'bayraklı', 'bergama', 'beydağ', 'bornova', 'buca', 'çeşme', 'çiğli', 'dikili', 'foça', 'gaziemir', 'güzelbahçe', 'karabağlar', 'karaburun', 'karşıyaka', 'kemalpaşa', 'kınık', 'kiraz', 'konak', 'menderes', 'menemen', 'narlıdere', 'ödemiş', 'seferihisar', 'selçuk', 'tire', 'torbalı', 'urla'],
+  kocaeli: ['başiskele', 'çayırova', 'darıca', 'derince', 'dilovası', 'gebze', 'gölcük', 'izmit', 'kandıra', 'karamürsel', 'kartepe', 'körfez'],
+  bursa: ['büyükorhan', 'gemlik', 'gürsu', 'harmancık', 'inegöl', 'iznik', 'karacabey', 'keles', 'kestel', 'mudanya', 'mustafakemalpaşa', 'nilüfer', 'orhaneli', 'orhangazi', 'osmangazi', 'yenişehir', 'yıldırım'],
+  eskişehir: ['odunpazarı', 'tepebaşı', 'alpu', 'çifteler', 'inönü', 'seyitgazi', 'sivrihisar', 'mahmudiye'],
+  kayseri: ['melikgazi', 'kocasinan', 'talas', 'hacılar', 'incesu', 'develi', 'bünyan', 'yahyalı'],
+  konya: ['selçuklu', 'meram', 'karatay', 'ereğli', 'akşehir', 'beyşehir', 'seydişehir', 'çumra', 'ılgın'],
+  sakarya: ['adapazarı', 'serdivan', 'erenler', 'arifiye', 'hendek', 'akyazı', 'sapanca', 'karasu', 'geyve', 'ferizli', 'pamukova'],
+  kırıkkale: ['yahşihan', 'keskin', 'delice', 'bahşılı', 'balışeyh', 'çelebi', 'karakeçili', 'sulakyurt'],
+  manisa: ['yunusemre', 'şehzadeler', 'akhisar', 'turgutlu', 'salihli', 'soma', 'alaşehir', 'saruhanlı', 'kula', 'demirci', 'ahmetli'],
+  aydın: ['efeler', 'nazilli', 'söke', 'kuşadası', 'didim', 'incirliova', 'germencik', 'çine', 'kuyucak', 'koçarlı', 'sultanhisar'],
+}
+
 export function matchHomeCity(location: string | null | undefined, homeCities: readonly string[]): string | null {
   if (!location) return null
   const loc = fold(location)
   for (const c of homeCities) if (loc.includes(fold(c))) return c
+  const words = new Set(loc.split(/[^a-z0-9çğıöşü]+/).filter(Boolean))
+  for (const c of homeCities) {
+    for (const d of DISTRICTS[fold(c)] ?? []) {
+      const parts = d.split(' ')
+      if (parts.every((p) => words.has(p))) return c
+    }
+  }
   return null
 }
 
@@ -422,13 +491,13 @@ export function prescreen(job: Pick<Job, 'title' | 'descriptionMd' | 'workplaceT
   if (flags.includes('günlük/sözlü İngilizce olabilir')) score -= 5
   if (flags.includes('sözleşmeli')) score -= 5
 
-  for (const b of RX.bonus) if (b.rx.test(desc)) bonuses.push(b.label)
+  for (const b of RADAR.bonus ?? RX.bonus) if (b.rx.test(desc)) bonuses.push(b.label)
   if (RX.multiRole.test(title)) bonuses.push('geniş rol') // BA + proje + test karışımı: tercih, ceza değil
   if (RX.ai.test(desc)) bonuses.push('AI kullanımı')
   const salary = detectSalary(desc)
   if (salary.maxTl !== null) {
-    if (salary.maxTl < 90_000) {
-      flags.push(`maaş 90k altı (${salary.text})`)
+    if (RADAR.salaryMinTl > 0 && salary.maxTl < RADAR.salaryMinTl) {
+      flags.push(`maaş ${Math.round(RADAR.salaryMinTl / 1000)}k altı (${salary.text})`)
       score -= 15
     } else bonuses.push(`maaş yazılı ${Math.round(salary.maxTl / 1000)}k`)
   }
@@ -454,7 +523,7 @@ export function prescreen(job: Pick<Job, 'title' | 'descriptionMd' | 'workplaceT
       score = Math.min(score, 60)
     }
   } else if (rem.remote === 'onsite') {
-    if (home) score += 0
+    if (home) score += RADAR.onsiteOk && primary ? 5 : 0
     else score = Math.min(score, 25)
   } else if (rem.remote === 'unknown') {
     // text silent. A real label (extension DOM) stands in with a mild cap; the guest collector has NO label
@@ -465,12 +534,17 @@ export function prescreen(job: Pick<Job, 'title' | 'descriptionMd' | 'workplaceT
     else if (isCountryOnly(job.location)) {
       score = Math.min(score, 65)
       reasons.push('çalışma şekli metinde yok; lokasyon şehirsiz (Türkiye geneli), muhtemelen remote')
+    } else if (home && RADAR.onsiteOk) {
+      // office work is the norm for this family: a silent text in an accepted city is simply an office job there
+      if (primary) score += 5
+      reasons.push(`çalışma şekli metinde yok; lokasyon ${homeCityName} (iş yerinde çalışma normal)`)
     } else if (home) {
       // stays "bak": a city location with silent text is usually office/hybrid, worth a look but not a candidate yet
       score = Math.min(score, 58)
       reasons.push(`çalışma şekli metinde yok; lokasyon ${homeCityName}, ofis/hibrit olabilir`)
     } else {
-      score = Math.min(score, 50)
+      // with office work as the norm, a silent ad in another city is an office job there = relocation
+      score = Math.min(score, RADAR.onsiteOk ? 25 : 50)
       reasons.push(`çalışma şekli metinde yok; lokasyon ${job.location} (kabul edilen şehir dışı)`)
     }
   }

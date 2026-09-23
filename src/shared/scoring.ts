@@ -4,7 +4,7 @@
  * rule (remote bonus, seniority penalty, caps…) is applied here, so the same facts always give the same score, the
  * breakdown is visible, and changing a weight re-computes stored scores without another LLM call.
  */
-import { HOME_CITIES } from './prescreen.ts'
+import { HOME_CITIES, matchHomeCity } from './prescreen.ts'
 import type { RoleFit, SeniorityFit } from './types.ts'
 
 export type Workplace = 'remote' | 'hybrid_ankara' | 'hybrid_home' | 'hybrid_other' | 'onsite_ankara' | 'onsite_home' | 'onsite_other' | 'unknown'
@@ -34,11 +34,15 @@ export const DEFAULT_WEIGHTS = {
   hybrid_other: -15,
   /** full office in an accepted city: no bonus, capped unless the fit is outstanding */
   onsite_home_cap: 70,
+  /** full office in the primary city (only matters for families where office work is the norm) */
+  onsite_primary: 0,
   onsite_home_cap_unless_fit: 85,
   onsite_other_cap: 25,
   /** text silent on workplace: location is only the country (likely remote) vs a city (likely office) */
   unknown_country_cap: 70,
   unknown_city_cap: 60,
+  /** text silent, location is a city outside the accepted list */
+  unknown_other_city_cap: 60,
   under: -5,
   stretch: -10,
   over: -20,
@@ -93,13 +97,16 @@ export function computeScore(f: Facts, ctx: { location?: string | null } = {}, w
       break
     case 'onsite_ankara':
     case 'onsite_home':
+      if (f.workplace === 'onsite_ankara') delta(`ofis · ${primary}`, w.onsite_primary)
       if (fit < w.onsite_home_cap_unless_fit) caps.push(['tam ofis', w.onsite_home_cap])
       break
     case 'onsite_other':
       caps.push(['başka şehirde tam ofis', w.onsite_other_cap])
       break
     default:
-      caps.push(countryOnly(ctx.location) ? ['çalışma şekli yazmıyor (lokasyon ülke)', w.unknown_country_cap] : ['çalışma şekli yazmıyor (lokasyon şehir)', w.unknown_city_cap])
+      if (countryOnly(ctx.location)) caps.push(['çalışma şekli yazmıyor (lokasyon ülke)', w.unknown_country_cap])
+      else if (matchHomeCity(ctx.location, HOME_CITIES)) caps.push(['çalışma şekli yazmıyor (lokasyon şehir)', w.unknown_city_cap])
+      else caps.push(['çalışma şekli yazmıyor (kabul edilen şehir dışı)', w.unknown_other_city_cap])
   }
   if (f.seniority_fit === 'under') delta('kıdem altında', w.under)
   if (f.seniority_fit === 'stretch') delta('kıdem biraz üstünde', w.stretch)

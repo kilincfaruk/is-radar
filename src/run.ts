@@ -2,7 +2,7 @@
 import { loadSearches, ensureDirs, env, type RunMode } from './config.ts'
 import { PoliteHttp, RateLimitedError, sleep } from './http.ts'
 import { parseSearchPage, parseDetailPage, searchUrl, detailUrl, saveSample } from './sources/linkedin-guest.ts'
-import { upsertCard, applyDetail, markDescriptionMissing, jobsNeedingDescription, startRun, updateRun, openDb, allJobs, getSetting, setSetting, knownJobIds, lastCompletedFullSearch, markClosed, markChecked, jobsNeedingLivenessCheck, linkDuplicates, closeMissingFromBoard, type JobRow } from './db.ts'
+import { upsertCard, applyDetail, markDescriptionMissing, jobsNeedingDescription, startRun, updateRun, openDb, allJobs, getSetting, setSetting, knownJobIds, lastCompletedFullSearch, markClosed, markChecked, jobsNeedingLivenessCheck, linkDuplicates, closeMissingFromBoard, skippedJobs, releaseSkipped, type JobRow } from './db.ts'
 import { fetchBoard, atsId, atsSource } from './sources/ats.ts'
 import { runPrescreen, runScoringWhile, runTopScoring } from './pipeline/score.ts'
 import { titleGate, detectRole } from './shared/prescreen.ts'
@@ -187,6 +187,14 @@ export async function collectRound(o: RunOptions = {}): Promise<number> {
 
     // details
     const budget = o.details ?? cfg.defaults.detail_budget
+    // titles skipped earlier get another look: the gate or the yaml role dictionaries may have changed since
+    let released = 0
+    for (const j of skippedJobs()) {
+      if (titleGate(j.title)) continue
+      releaseSkipped(j.linkedin_job_id)
+      released++
+    }
+    if (released) log.info(`başlık kapısı: daha önce atlanan ${released} ilan artık hedefte, metni çekilecek`)
     // title gate: obviously irrelevant titles never spend a request
     let gated = 0
     for (const j of jobsNeedingDescription(100000)) {

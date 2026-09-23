@@ -284,6 +284,14 @@ export function jobsNeedingDescription(limit: number): JobRow[] {
     .all(limit) as unknown as JobRow[]
 }
 
+/** Rows the title gate skipped (title only), so a later gate / dictionary change can release them. */
+export function skippedJobs(): Array<{ linkedin_job_id: string; title: string }> {
+  return openDb().prepare(`SELECT linkedin_job_id, title FROM jobs WHERE description_fetched_at LIKE 'skipped:%'`).all() as Array<{ linkedin_job_id: string; title: string }>
+}
+export function releaseSkipped(id: string): void {
+  openDb().prepare(`UPDATE jobs SET description_fetched_at = NULL, pre_verdict = NULL, pre_score = NULL, pre_json = NULL WHERE linkedin_job_id = ?`).run(id)
+}
+
 /** Title gate decided not to spend a request on this one. Reversible: clear description_fetched_at. */
 export function markDescriptionSkipped(id: string, reason: string): void {
   openDb().prepare(`UPDATE jobs SET description_fetched_at = ? WHERE linkedin_job_id = ?`).run('skipped:' + reason, id)
