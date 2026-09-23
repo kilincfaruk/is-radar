@@ -4,6 +4,10 @@ import type { PreScreen } from '@/lib/prescreen'
 import { agreement, bucket, DECISION_REASONS, eyebrow, facts, modelLine, ROLE_TR, scoreOf, SENIORITY_TR, suspectWhy, wordCount, workplaceView } from '@/lib/model'
 import { Markdown } from './Markdown'
 import { cx, fmtWhen } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
+import { Kbd } from '@/components/ui/kbd'
+import { cn } from '@/lib/cn'
+import { ArrowLeft } from 'lucide-react'
 
 type Props = {
   job: Job
@@ -100,17 +104,17 @@ export function Detail(p: Props) {
       <div style={{ position: 'sticky', top: 0, background: 'var(--bg)', borderBottom: '1px solid var(--line)', zIndex: 2 }}>
         <div style={{ padding: '10px 24px', display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
           {!p.inline && (
-            <button className="btn ghost sm" onClick={p.onClose}>
-              ← Geri <kbd className="k">Esc</kbd>
-            </button>
+            <Button variant="ghost" size="sm" onClick={p.onClose}>
+              <ArrowLeft /> Geri <Kbd>Esc</Kbd>
+            </Button>
           )}
           <div className="mono ell" style={{ flex: 1, minWidth: 0, fontSize: 13, color: 'var(--dim)' }}>{p.posLine}</div>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             {STATUS_BTNS.map((sb) => (
-              <button key={sb.st} className={cx('btn', j.status === sb.st && 'on')} onClick={() => p.onStatus(sb.st)}>
-                {sb.key && <kbd className="mono" style={{ fontSize: 10.5, opacity: 0.7 }}>{sb.key}</kbd>}
+              <Button key={sb.st} variant="outline" size="sm" className={cn(j.status === sb.st && 'border-primary bg-primary/15 text-primary hover:bg-primary/20 hover:text-primary dark:border-primary dark:bg-primary/15')} onClick={() => p.onStatus(sb.st)}>
+                {sb.key && <Kbd>{sb.key}</Kbd>}
                 {sb.label}
-              </button>
+              </Button>
             ))}
           </div>
         </div>
@@ -296,12 +300,12 @@ export function Detail(p: Props) {
 
         <aside style={{ flex: '1 1 260px', maxWidth: 340, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-            <button className="btn sm" onClick={p.onRescore} disabled={!j.descriptionMd || p.busy.rescore}>{p.busy.rescore ? <span className="spin" /> : null}Yeniden skorla</button>
-            <button className="btn sm" onClick={p.onResearch} disabled={!j.descriptionMd || p.busy.research}>{p.busy.research ? <span className="spin" /> : null}Şirketi araştır</button>
-            <button className="btn sm" onClick={p.onCover} disabled={!j.descriptionMd || p.cover?.busy}>{p.cover?.busy ? <span className="spin" /> : null}Ön yazı üret</button>
-            <button className="btn sm" onClick={p.onCvTips} disabled={!j.descriptionMd || p.busy.cvTips} title="CV’ni bu ilana göre nasıl uyarlayacağını söylerim">{p.busy.cvTips ? <span className="spin" /> : null}{j.cvTipsMd ? 'CV ipuçlarını yenile' : 'CV ipuçları'}</button>
-            <button className="btn sm" onClick={p.onCheck} disabled={p.busy.check} title={j.checkedAt ? `Son kontrol ${fmtWhen(j.checkedAt)}` : 'LinkedIn sayfasını yeniden çekip hâlâ başvuru alıyor mu bakarım'}>{p.busy.check ? <span className="spin" /> : null}İlan açık mı?</button>
-            <button className="btn sm danger" onClick={p.onDelete}>Sil</button>
+            <Button variant="outline" size="sm" className="h-7 px-2.5 text-xs" onClick={p.onRescore} disabled={!j.descriptionMd || p.busy.rescore}>{p.busy.rescore ? <span className="spin" /> : null}Yeniden skorla</Button>
+            <Button variant="outline" size="sm" className="h-7 px-2.5 text-xs" onClick={p.onResearch} disabled={!j.descriptionMd || p.busy.research}>{p.busy.research ? <span className="spin" /> : null}Şirketi araştır</Button>
+            <Button variant="outline" size="sm" className="h-7 px-2.5 text-xs" onClick={p.onCover} disabled={!j.descriptionMd || p.cover?.busy}>{p.cover?.busy ? <span className="spin" /> : null}Ön yazı üret</Button>
+            <Button variant="outline" size="sm" className="h-7 px-2.5 text-xs" onClick={p.onCvTips} disabled={!j.descriptionMd || p.busy.cvTips} title="CV’ni bu ilana göre nasıl uyarlayacağını söylerim">{p.busy.cvTips ? <span className="spin" /> : null}{j.cvTipsMd ? 'CV ipuçlarını yenile' : 'CV ipuçları'}</Button>
+            <Button variant="outline" size="sm" className="h-7 px-2.5 text-xs" onClick={p.onCheck} disabled={p.busy.check} title={j.checkedAt ? `Son kontrol ${fmtWhen(j.checkedAt)}` : 'LinkedIn sayfasını yeniden çekip hâlâ başvuru alıyor mu bakarım'}>{p.busy.check ? <span className="spin" /> : null}İlan açık mı?</Button>
+            <Button variant="outline" size="sm" className="h-7 px-2.5 text-xs text-muted-foreground hover:border-destructive hover:text-destructive" onClick={p.onDelete}>Sil</Button>
           </div>
           <section className="card" style={{ padding: 16 }}>
             <Eyebrow right={(j.notes ?? '') !== notes ? <span className="mono" style={{ fontSize: 11, color: 'var(--dim)' }}>kaydediyorum…</span> : undefined}>Notlarım</Eyebrow>

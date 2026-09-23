@@ -2,6 +2,7 @@ import type { Job, JobStatus } from '@/lib/types'
 import type { PreScreen } from '@/lib/prescreen'
 import { bucket, scoreOf, workplaceView } from '@/lib/model'
 import { fmtDate, fmtWhen, rel } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
 
 const GROUPS: Array<{ st: JobStatus; label: string; empty: string }> = [
   { st: 'interviewing', label: 'Görüşme', empty: 'Görüşmede olduğun ilan yok.' },
@@ -52,8 +53,8 @@ export function Shortlist(p: Props) {
           <h1 style={{ margin: 0, fontSize: 22, fontWeight: 600 }}>Shortlist</h1>
           <div style={{ display: 'flex', gap: 12, alignItems: 'baseline', flexWrap: 'wrap' }}>
             <div style={{ fontSize: 13, color: 'var(--dim)' }}>Döneceğin yer burası: tam metin, şirket notu, ön yazı.</div>
-            <a className="btn sm" href="/api/report?download=1" title="Takiptekiler, bakmaya değerler ve yeni gelenler; tek dosya, internetsiz açılır">HTML rapor</a>
-            <button className="btn sm" onClick={() => exportMarkdown(p.jobs, p.pre, p.threshold)} disabled={p.jobs.length === 0} title="Markdown tablo olarak indir, Notion/Obsidian'a yapıştırabilirsin">Dışa aktar (.md)</button>
+            <Button asChild variant="outline" size="sm" className="h-7 px-2.5 text-xs"><a href="/api/report?download=1" title="Takiptekiler, bakmaya değerler ve yeni gelenler; tek dosya, internetsiz açılır">HTML rapor</a></Button>
+            <Button variant="outline" size="sm" className="h-7 px-2.5 text-xs" onClick={() => exportMarkdown(p.jobs, p.pre, p.threshold)} disabled={p.jobs.length === 0} title="Markdown tablo olarak indir, Notion/Obsidian'a yapıştırabilirsin">Dışa aktar (.md)</Button>
           </div>
         </div>
         {GROUPS.map((g) => {
@@ -87,10 +88,10 @@ export function Shortlist(p: Props) {
                       <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                         <span className="mono" style={{ fontSize: 11, color: 'var(--dim)' }}>{j.appliedAt ? 'başvuru ' + fmtWhen(j.appliedAt) : rel(j.postedAt ?? j.firstSeenAt)}</span>
                         {g.st === 'shortlist' && (
-                          <button className="btn sm" onClick={(e) => { e.stopPropagation(); p.onStatus(j.linkedinJobId, 'applied') }}>Başvurdum</button>
+                          <Button variant="outline" size="sm" className="h-7 px-2.5 text-xs" onClick={(e) => { e.stopPropagation(); p.onStatus(j.linkedinJobId, 'applied') }}>Başvurdum</Button>
                         )}
                         {g.st === 'applied' && (
-                          <button className="btn sm" onClick={(e) => { e.stopPropagation(); p.onStatus(j.linkedinJobId, 'interviewing') }} style={{ borderColor: 'var(--line2)' }}>Görüşme</button>
+                          <Button variant="outline" size="sm" className="h-7 px-2.5 text-xs" onClick={(e) => { e.stopPropagation(); p.onStatus(j.linkedinJobId, 'interviewing') }} style={{ borderColor: 'var(--line2)' }}>Görüşme</Button>
                         )}
                       </div>
                     </div>

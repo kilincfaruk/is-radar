@@ -2,6 +2,9 @@ import { DEFAULT_WEIGHTS, type ScoreWeights } from '@shared/scoring'
 import { useEffect, useState } from 'react'
 import { server, type ServerSettings } from '@/lib/platform'
 import { Markdown } from './Markdown'
+import { Button } from '@/components/ui/button'
+import { Switch } from '@/components/ui/switch'
+import { Label } from '@/components/ui/label'
 
 const WEIGHT_LABEL: Record<keyof ScoreWeights, string> = {
   remote: 'tam remote bonusu',
@@ -168,7 +171,7 @@ export function Settings(p: Props) {
             <div style={{ fontWeight: 600 }}>Masaüstü bildirimi</div>
             <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 3 }}>Sekme arka plandayken eşiği geçen yeni bir ilan skorlarsam tarayıcıdan haber veririm. Sadece bu tarayıcıda çalışır.</div>
           </div>
-          <button className={p.notify ? 'btn on' : 'btn'} onClick={p.onToggleNotify}>{p.notify ? 'Açık' : 'Kapalı'}</button>
+          <Switch checked={p.notify} onCheckedChange={p.onToggleNotify} aria-label="Masaüstü bildirimi" />
         </section>
         <section className="card" style={{ padding: 20 }}>
           <div style={{ fontWeight: 600 }}>Radar: şehirler, roller, eşikler</div>
@@ -185,7 +188,9 @@ export function Settings(p: Props) {
                 <input className="input mono" type="number" min={5} max={85} value={tRev} onChange={(e) => setTRev(Number(e.target.value))} style={{ width: 64, textAlign: 'center' }} />
                 <span className="muted">candidate ≥</span>
                 <input className="input mono" type="number" min={15} max={95} value={tCand} onChange={(e) => setTCand(Number(e.target.value))} style={{ width: 64, textAlign: 'center' }} />
-                <button className={hybrid ? 'chip on' : 'chip'} onClick={() => setHybrid((v) => !v)} title="Hibrite açık mısın">hibrit olur</button>
+                <Label className="gap-2 text-[13px] font-normal text-muted-foreground" title="Hibrite açık mısın">
+                  <Switch checked={hybrid} onCheckedChange={setHybrid} /> hibrit olur
+                </Label>
               </div>
             </div>
           </div>
@@ -215,7 +220,7 @@ export function Settings(p: Props) {
             <button className="link" style={{ fontSize: 12, marginTop: 8 }} onClick={() => setWeights({ ...DEFAULT_WEIGHTS })}>Varsayılana dön</button>
           </details>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 12 }}>
-            <button className="btn primary" onClick={saveRadar} disabled={radarSaving || !s}>{radarSaving ? 'Kaydediyorum…' : 'Radar ayarını kaydet'}</button>
+            <Button size="sm" onClick={saveRadar} disabled={radarSaving || !s}>{radarSaving ? 'Kaydediyorum…' : 'Radar ayarını kaydet'}</Button>
           </div>
         </section>
         <section className="card" style={{ padding: 20 }}>
@@ -226,7 +231,7 @@ export function Settings(p: Props) {
           <textarea className="textarea mono" value={yaml} onChange={(e) => setYaml(e.target.value)} spellCheck={false} style={{ minHeight: 320, marginTop: 12 }} />
           {err && <div style={{ marginTop: 10, fontSize: 13, color: 'var(--red)' }}>{err}</div>}
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 10 }}>
-            <button className="btn primary" onClick={save} disabled={saving || !s}>{saving ? 'Kaydediyorum…' : 'Kaydet'}</button>
+            <Button size="sm" onClick={save} disabled={saving || !s}>{saving ? 'Kaydediyorum…' : 'Kaydet'}</Button>
           </div>
         </section>
         <section className="card" style={{ padding: 20, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
@@ -244,7 +249,7 @@ export function Settings(p: Props) {
               <div style={{ fontWeight: 600 }}>Kriter incelemesi</div>
               <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 3 }}>Shortlist / yoksay / reddet kararlarını (ve sebeplerini) LLM skorlarıyla karşılaştırıp criteria.md ve about.md için somut değişiklik öneririm. En az 10 karar lazım.</div>
             </div>
-            <button className="btn" onClick={startCriteria} disabled={critBusy || p.busy}>{critBusy || p.busy ? <span className="spin" /> : null}{crit ? 'Yeniden incele' : 'İncele'}</button>
+            <Button variant="outline" size="sm" onClick={startCriteria} disabled={critBusy || p.busy}>{critBusy || p.busy ? <span className="spin" /> : null}{crit ? 'Yeniden incele' : 'İncele'}</Button>
           </div>
           {crit && (
             <div style={{ marginTop: 16 }}>
@@ -258,7 +263,7 @@ export function Settings(p: Props) {
               <div style={{ fontWeight: 600 }}>CV incelemesi</div>
               <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 3 }}>En yüksek puanlı ilanlara toplu bakıp CV’nin seni nerede eksik sattığını söylerim. Uydurma tecrübe önermem; olanı yeniden konumlandırırım.</div>
             </div>
-            <button className="btn" onClick={startReview} disabled={reviewBusy || p.busy}>{reviewBusy || p.busy ? <span className="spin" /> : null}{review ? 'Yeniden incele' : 'İncele'}</button>
+            <Button variant="outline" size="sm" onClick={startReview} disabled={reviewBusy || p.busy}>{reviewBusy || p.busy ? <span className="spin" /> : null}{review ? 'Yeniden incele' : 'İncele'}</Button>
           </div>
           {review && (
             <div style={{ marginTop: 16 }}>

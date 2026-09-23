@@ -4,6 +4,9 @@ import type { ServerStats } from '@/lib/platform'
 import { bucket, STATUS_LABEL, type JobView, type ScoreFunnel } from '@/lib/model'
 import { EMPTY_FILTERS, facets, filterCount, summary, type Ctx, type Filters } from '@/lib/filters'
 import { cx, fmtWhen, rel } from '@/lib/utils'
+import { Badge } from '@/components/ui/badge'
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
+import { Separator } from '@/components/ui/separator'
 
 export type QueueKey = 'new' | 'suspect' | 'rejected' | 'decided' | 'all'
 
@@ -42,16 +45,45 @@ const QUEUES: Array<{ key: QueueKey; label: string }> = [
   { key: 'all', label: 'Tümü' },
 ]
 
-/** Hover text for a list row: the model's one-liner plus the top pro/con and what the rule engine saw. */
-function hoverText(j: Job, v: JobView): string {
-  const out: string[] = []
-  if (j.summary) out.push(j.summary)
-  for (const x of j.pros.slice(0, 2)) out.push('+ ' + x)
-  for (const x of [...j.redFlags, ...j.cons].slice(0, 2)) out.push('− ' + x)
-  const rule = [...v.pre.flags, ...v.pre.bonuses, ...v.pre.reasons].slice(0, 3).join(', ')
-  if (rule) out.push(`kural ${v.pre.verdict} (${v.pre.score}): ${rule}`)
-  if (j.decisionReason) out.push(`sebep: ${j.decisionReason}`)
-  return out.join('\n')
+/** Rich hover card for a list row: the model's one-liner, score breakdown, top pros/cons and what the rule engine saw. */
+function RowPreview({ j, v, you }: { j: Job; v: JobView; you: number | null }) {
+  const parts = (j.scoreParts ?? []).filter((x) => x.applied)
+  const cons = [...j.redFlags, ...j.cons].slice(0, 3)
+  const rule = [...v.pre.flags, ...v.pre.bonuses, ...v.pre.reasons].slice(0, 3).join(' · ')
+  return (
+    <div className="flex flex-col gap-2 text-[13px] leading-snug">
+      <div>
+        <div className="font-semibold">{j.title}</div>
+        <div className="text-muted-foreground">{j.company ?? '–'} · {v.wp.label}</div>
+      </div>
+      {parts.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {parts.map((x, i) => (
+            <Badge key={i} variant="outline" className="font-mono text-[11px] font-normal" style={{ color: x.kind === 'base' ? undefined : x.kind === 'cap' ? 'var(--amber)' : x.value > 0 ? 'var(--accent)' : 'var(--red)' }}>
+              {x.kind === 'base' ? `${x.value} ${x.label}` : x.kind === 'cap' ? `≤${x.value} ${x.label}` : `${x.value > 0 ? '+' : '−'}${Math.abs(x.value)} ${x.label}`}
+            </Badge>
+          ))}
+        </div>
+      )}
+      {j.summary ? <p>{j.summary}</p> : <p className="text-muted-foreground">{j.scoredAt ? 'Özet yok.' : 'Claude henüz okumadı.'}</p>}
+      {(j.pros.length > 0 || cons.length > 0) && (
+        <ul className="flex flex-col gap-0.5">
+          {j.pros.slice(0, 3).map((x, i) => (
+            <li key={'p' + i} className="flex gap-1.5"><span className="text-primary">+</span><span>{x}</span></li>
+          ))}
+          {cons.map((x, i) => (
+            <li key={'c' + i} className="flex gap-1.5"><span style={{ color: 'var(--amber)' }}>−</span><span>{x}</span></li>
+          ))}
+        </ul>
+      )}
+      <Separator />
+      <div className="font-mono text-[11.5px] text-muted-foreground">
+        kural {v.pre.verdict} ({v.pre.score}){rule ? ` · ${rule}` : ''}
+        {you != null && <span style={{ color: 'var(--blue)' }}> · sana göre %{Math.round(you * 100)}</span>}
+        {j.decisionReason && <> · sebep: {j.decisionReason}</>}
+      </div>
+    </div>
+  )
 }
 
 function sinceLine(stats: ServerStats | null): string {
@@ -160,7 +192,9 @@ export function Inbox(p: Props) {
           const on = j.linkedinJobId === p.selectedId
           const st = STATUS_LABEL[j.status]
           return (
-            <div key={j.linkedinJobId} className={cx('row', on && 'on', j.status !== 'new' && p.queue !== 'decided' && 'done', !j.viewedAt && j.status === 'new' && 'unread')} onClick={() => p.onSelect(j.linkedinJobId)} data-id={j.linkedinJobId} title={hoverText(j, v)}>
+            <HoverCard key={j.linkedinJobId} openDelay={550} closeDelay={60}>
+            <HoverCardTrigger asChild>
+            <div className={cx('row', on && 'on', j.status !== 'new' && p.queue !== 'decided' && 'done', !j.viewedAt && j.status === 'new' && 'unread')} onClick={() => p.onSelect(j.linkedinJobId)} data-id={j.linkedinJobId}>
               <div className="score" style={{ color: bucket(s, p.threshold).color }}>
                 {s == null ? '—' : s}
                 {p.youOf && s != null && (() => {
@@ -188,6 +222,11 @@ export function Inbox(p: Props) {
                 </div>
               </div>
             </div>
+            </HoverCardTrigger>
+            <HoverCardContent side="right" align="start" sideOffset={10} className="w-96">
+              <RowPreview j={j} v={v} you={p.youOf ? p.youOf(j) : null} />
+            </HoverCardContent>
+            </HoverCard>
           )
         })}
         {p.rows.length === 0 && (
@@ -221,6 +260,7 @@ export function Inbox(p: Props) {
         <span><kbd className="k">/</kbd> ara</span>
         <span><kbd className="k">F</kbd> filtre</span>
         <span><kbd className="k">O</kbd> aç</span>
+        <span><kbd className="k">Ctrl K</kbd> komut</span>
       </div>
     </aside>
   )

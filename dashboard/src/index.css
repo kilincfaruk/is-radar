@@ -1,3 +1,20 @@
+/*
+ * Tailwind v4 + shadcn/ui on top of the existing design. Tailwind's global preflight is NOT imported: it would shift
+ * every hand-styled screen. shadcn components carry data-slot on each element, so a scoped reset (below, in the base
+ * layer so utilities still win) gives them the clean slate they expect. The app sets data-theme on <html>.
+ */
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+@import "tw-animate-css";
+@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
+
+@layer base {
+  :where([data-slot]), :where([data-slot]) :where(*, ::before, ::after) { box-sizing: border-box; margin: 0; padding: 0; border: 0 solid; }
+  :where(button[data-slot], input[data-slot], textarea[data-slot]) { font: inherit; color: inherit; background-color: transparent; }
+  :where([data-slot]) :where(svg) { display: block; flex-shrink: 0; }
+}
+
 /* İş Radar dashboard — tokens + primitives. Dark is the default; [data-theme="light"] flips. */
 :root {
   --bg: #0e1013; --surface: #15181d; --elev: #1c2027; --line: #262b34; --line2: #323947;
@@ -14,6 +31,60 @@
   --text: #1a1c20; --muted: #5f656f; --dim: #8b9099;
   --accent: #1f9d64; --accent-ink: #ffffff; --amber: #a8771a; --red: #c93e49; --blue: #2c66b8;
   --chip: #eeece6; --shadow: 0 20px 50px rgba(30, 30, 20, 0.12);
+}
+
+/*
+ * shadcn/ui colour contract mapped onto İş Radar tokens. Two shadcn names clash with ours and are NOT defined as raw
+ * variables: --muted (ours = secondary text colour) and --accent (ours = brand green). Components only reach them
+ * through Tailwind classes (bg-muted, bg-accent), which resolve via the --color-* theme below.
+ */
+:root {
+  --background: var(--bg);
+  --foreground: var(--text);
+  --card: var(--surface);
+  --card-foreground: var(--text);
+  --popover: var(--elev);
+  --popover-foreground: var(--text);
+  --primary: var(--accent);
+  --primary-foreground: var(--accent-ink);
+  --secondary: var(--chip);
+  --secondary-foreground: var(--text);
+  --muted-foreground: var(--muted);
+  --accent-foreground: var(--text);
+  --destructive: var(--red);
+  --border: var(--line);
+  --input: var(--line2);
+  --ring: var(--accent);
+  --radius: 0.6rem;
+}
+@theme inline {
+  --color-background: var(--bg);
+  --color-foreground: var(--text);
+  --color-card: var(--surface);
+  --color-card-foreground: var(--text);
+  --color-popover: var(--elev);
+  --color-popover-foreground: var(--text);
+  --color-primary: var(--accent);
+  --color-primary-foreground: var(--accent-ink);
+  --color-secondary: var(--chip);
+  --color-secondary-foreground: var(--text);
+  --color-muted: var(--chip);
+  --color-muted-foreground: var(--muted);
+  --color-accent: var(--chip);
+  --color-accent-foreground: var(--text);
+  --color-destructive: var(--red);
+  --color-border: var(--line);
+  --color-input: var(--line2);
+  --color-ring: var(--accent);
+  --color-amber: var(--amber);
+  --color-blue: var(--blue);
+  --color-dim: var(--dim);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --font-sans: var(--sans);
+  --font-mono: var(--mono);
 }
 
 * { box-sizing: border-box; }
@@ -53,11 +124,6 @@ a.btn { text-decoration: none; }
 .link { background: none; border: 0; color: var(--accent); padding: 0; font-size: inherit; font-weight: 600; }
 .link:hover { text-decoration: underline; }
 
-.tab { display: flex; align-items: center; gap: 8px; background: none; border: 0; border-radius: 99px; padding: 7px 14px; font-size: 13.5px; color: var(--muted); font-weight: 500; white-space: nowrap; }
-.tab:hover { color: var(--text); }
-.tab.on { background: var(--chip); color: var(--text); font-weight: 600; }
-.tab .n { font-family: var(--mono); font-size: 11px; padding: 1px 6px; border-radius: 99px; background: var(--chip); color: var(--muted); }
-.tab.on .n { background: var(--line2); }
 
 .pill { background: var(--chip); color: var(--muted); border: 0; border-radius: 99px; padding: 5px 10px; font-size: 12.5px; font-weight: 600; display: inline-flex; gap: 6px; align-items: center; }
 .pill.on { background: var(--text); color: var(--bg); }

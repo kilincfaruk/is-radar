@@ -1,5 +1,9 @@
 import type { ServerStats } from '@/lib/platform'
-import { cx } from '@/lib/utils'
+import { Command, Moon, Sun } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Kbd } from '@/components/ui/kbd'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 
 export type View = 'inbox' | 'shortlist' | 'system' | 'settings'
 
@@ -10,6 +14,7 @@ type Props = {
   stats: ServerStats | null
   dark: boolean
   onTheme: () => void
+  onCommand: () => void
 }
 
 export function jobLine(stats: ServerStats | null): { busy: boolean; text: string } {
@@ -24,7 +29,7 @@ export function jobLine(stats: ServerStats | null): { busy: boolean; text: strin
   return { busy: false, text: 'Boşta' }
 }
 
-export function Header({ view, onView, counts, stats, dark, onTheme }: Props) {
+export function Header({ view, onView, counts, stats, dark, onTheme, onCommand }: Props) {
   const jl = jobLine(stats)
   const tabs: Array<{ key: View; label: string; count?: number }> = [
     { key: 'inbox', label: 'Gelenler', count: counts.inbox },
@@ -38,21 +43,36 @@ export function Header({ view, onView, counts, stats, dark, onTheme }: Props) {
         <span style={{ width: 9, height: 9, borderRadius: 99, background: jl.busy ? 'var(--accent)' : 'var(--dim)', display: 'inline-block', animation: jl.busy ? 'pulse 1.6s ease-in-out infinite' : 'none' }} />
         <span>İş Radar</span>
       </div>
-      <nav style={{ display: 'flex', gap: 4, flex: 1, minWidth: 0, overflow: 'auto' }}>
-        {tabs.map((t) => (
-          <button key={t.key} className={cx('tab', view === t.key && 'on')} onClick={() => onView(t.key)}>
-            <span>{t.label}</span>
-            {t.count !== undefined && <span className="n">{t.count}</span>}
-          </button>
-        ))}
-      </nav>
-      <button className="btn ghost sm" onClick={() => onView('system')} title="Sistem">
-        <span style={{ width: 7, height: 7, borderRadius: 99, background: jl.busy ? 'var(--accent)' : 'var(--dim)' }} />
-        <span className="mono">{jl.text}</span>
-      </button>
-      <button className="btn ghost" onClick={onTheme} title="Tema" aria-label="Tema" style={{ width: 32, height: 32, padding: 0, justifyContent: 'center' }}>
-        {dark ? '☾' : '☀'}
-      </button>
+      <Tabs value={view} onValueChange={(v) => onView(v as View)} className="min-w-0 flex-1">
+        <TabsList className="bg-secondary/60">
+          {tabs.map((t) => (
+            <TabsTrigger key={t.key} value={t.key} className="gap-2 px-3 text-[13.5px] data-[state=active]:bg-background">
+              {t.label}
+              {t.count !== undefined && <span className="rounded-full bg-secondary px-1.5 font-mono text-[11px] text-muted-foreground">{t.count}</span>}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
+      <Button variant="outline" size="sm" className="text-muted-foreground" onClick={onCommand}>
+        <Command /> Komut <Kbd>Ctrl K</Kbd>
+      </Button>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button variant="ghost" size="sm" className="rounded-full text-muted-foreground" onClick={() => onView('system')}>
+            <span className="inline-block size-[7px] rounded-full" style={{ background: jl.busy ? 'var(--accent)' : 'var(--dim)' }} />
+            <span className="font-mono text-xs">{jl.text}</span>
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>Sistem sekmesi: turlar, log, kalibrasyon</TooltipContent>
+      </Tooltip>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button variant="ghost" size="icon-sm" className="rounded-full" onClick={onTheme} aria-label="Tema">
+            {dark ? <Moon /> : <Sun />}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>{dark ? 'Açık temaya geç' : 'Koyu temaya geç'}</TooltipContent>
+      </Tooltip>
     </header>
   )
 }

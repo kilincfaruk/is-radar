@@ -6,6 +6,7 @@ import { jobLine } from './Header'
 import { durationText, fmtWhen } from '@/lib/utils'
 import { MIN_DECISIONS, MIN_PER_CLASS, type LearnedModel } from '@shared/learn'
 import { MIN_CALIB_ROWS, type Calibration, type ScoreFunnel, type ThresholdSuggestion } from '@/lib/model'
+import { Button } from '@/components/ui/button'
 
 type Props = {
   stats: ServerStats | null
@@ -142,11 +143,11 @@ export function System(p: Props) {
               <div style={{ height: '100%', background: 'var(--accent)', width: `${pct}%`, transition: 'width .6s ease' }} />
             </div>
             <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
-              <button className="btn" onClick={() => p.onRun()} disabled={busy}>Tur başlat</button>
-              <button className="btn" onClick={() => p.onRun('full')} disabled={busy} title="30 günlük tam tarama">Tam tur</button>
-              <button className="btn" onClick={p.onScore} disabled={busy || (p.funnel.queued === 0 && p.funnel.errored === 0)} title={p.funnel.errored ? `${p.funnel.errored} hatalı ilanı da yeniden denerim` : undefined}>
+              <Button variant="outline" size="sm" onClick={() => p.onRun()} disabled={busy}>Tur başlat</Button>
+              <Button variant="outline" size="sm" onClick={() => p.onRun('full')} disabled={busy} title="30 günlük tam tarama">Tam tur</Button>
+              <Button variant="outline" size="sm" onClick={p.onScore} disabled={busy || (p.funnel.queued === 0 && p.funnel.errored === 0)} title={p.funnel.errored ? `${p.funnel.errored} hatalı ilanı da yeniden denerim` : undefined}>
                 Birikeni skorla{p.funnel.queued + p.funnel.errored > 0 ? ` (${p.funnel.queued + p.funnel.errored})` : ''}
-              </button>
+              </Button>
             </div>
           </div>
           <div className="card">
@@ -182,7 +183,7 @@ export function System(p: Props) {
               <b style={{ color: 'var(--amber)' }}>{p.staleCount} iyi ilan eski profilinle skorlanmış.</b>{' '}
               <span style={{ color: 'var(--muted)' }}>CV'n, kriterlerin ya da about.md sonradan değişti. Bunları güncel halinle bir daha okuyayım, sıralama kaymasın.</span>
             </div>
-            <button className="btn" onClick={p.onRescoreStale} disabled={busy}>Yeniden skorla</button>
+            <Button variant="outline" size="sm" onClick={p.onRescoreStale} disabled={busy}>Yeniden skorla</Button>
           </div>
         )}
         <div className="card" style={{ marginBottom: 26 }}>
@@ -253,7 +254,7 @@ export function System(p: Props) {
                     <span style={{ color: 'var(--accent)' }}>
                       Öneri: review ≥ {p.suggestion.review}, candidate ≥ {p.suggestion.candidate} → hemfikir %{Math.round((p.suggestion.agree / p.suggestion.scored) * 100)} (şu an %{Math.round((p.suggestion.current.agree / p.suggestion.scored) * 100)})
                     </span>
-                    <button className="btn sm" onClick={() => p.onApplyThresholds({ review: p.suggestion!.review, candidate: p.suggestion!.candidate })}>Uygula</button>
+                    <Button variant="outline" size="sm" className="h-7 px-2.5 text-xs" onClick={() => p.onApplyThresholds({ review: p.suggestion!.review, candidate: p.suggestion!.candidate })}>Uygula</Button>
                   </>
                 ) : (
                   <span style={{ color: 'var(--dim)' }}>Eşikler bu veriyle zaten en iyi noktada.</span>
@@ -308,8 +309,8 @@ export function System(p: Props) {
             İnternetsiz açılır, istediğine gönderebilirsin.
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-            <a className="btn" href="/api/report" target="_blank" rel="noreferrer">Şimdiki durumu aç</a>
-            <a className="btn" href="/api/report?download=1">İndir (.html)</a>
+            <Button asChild variant="outline" size="sm"><a href="/api/report" target="_blank" rel="noreferrer">Şimdiki durumu aç</a></Button>
+            <Button asChild variant="outline" size="sm"><a href="/api/report?download=1">İndir (.html)</a></Button>
             {reports.length > 0 && <a className="link" href="/api/reports/latest.html" target="_blank" rel="noreferrer" style={{ fontSize: 13 }}>son tur raporu</a>}
           </div>
           {reports.length > 1 && (

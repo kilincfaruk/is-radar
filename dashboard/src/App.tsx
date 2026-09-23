@@ -14,6 +14,9 @@ import { Shortlist } from '@/components/Shortlist'
 import { System } from '@/components/System'
 import { Settings } from '@/components/Settings'
 import { Toast, type ToastMsg } from '@/components/Toast'
+import { CommandMenu } from '@/components/CommandMenu'
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
+import { Button } from '@/components/ui/button'
 
 const STATS_POLL_MS = 4000
 const VIEWS: View[] = ['inbox', 'shortlist', 'system', 'settings']
@@ -61,6 +64,7 @@ export default function App() {
   const [sortBy, setSortBy] = useState<'score' | 'you'>(() => readLS('isradar.sortBy', 'score'))
   const [dark, setDark] = useState<boolean>(() => readLS('isradar.theme', 'dark') === 'dark')
   const [toast, setToast] = useState<ToastMsg | null>(null)
+  const [cmdOpen, setCmdOpen] = useState(false)
   const [covers, setCovers] = useState<Record<string, Cover>>({})
   const [busy, setBusy] = useState<Record<string, { rescore?: boolean; research?: boolean; cvTips?: boolean; check?: boolean }>>({})
   const toastT = useRef<number | null>(null)
@@ -452,9 +456,10 @@ export default function App() {
     },
     [patchLocal, showToast],
   )
+  // delete asks first through an AlertDialog (pendingDelete), then this runs
+  const [pendingDelete, setPendingDelete] = useState<Job | null>(null)
   const remove = useCallback(
     async (j: Job) => {
-      if (!confirm('Bu ilanı sileyim mi? LinkedIn’de yine çıkarsa geri eklerim.')) return
       setJobs((cur) => cur.filter((x) => x.linkedinJobId !== j.linkedinJobId))
       setDetailId(null)
       try {
@@ -500,6 +505,17 @@ export default function App() {
   }, [showToast, pollStats])
 
   // ---- keyboard
+  // Ctrl/Cmd+K opens the command palette from anywhere, inputs included
+  useEffect(() => {
+    const onK = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setCmdOpen((v) => !v)
+      }
+    }
+    window.addEventListener('keydown', onK)
+    return () => window.removeEventListener('keydown', onK)
+  }, [])
   const move = useCallback(
     (d: number) => {
       if (!rows.length) return
@@ -565,7 +581,7 @@ export default function App() {
 
   return (
     <div className="app">
-      <Header view={view} onView={(v) => { setView(v); setDetailId(null) }} counts={{ inbox: queueCounts.new, shortlist: shortlisted.length }} stats={stats} dark={dark} onTheme={() => setDark((v) => !v)} />
+      <Header view={view} onView={(v) => { setView(v); setDetailId(null) }} counts={{ inbox: queueCounts.new, shortlist: shortlisted.length }} stats={stats} dark={dark} onTheme={() => setDark((v) => !v)} onCommand={() => setCmdOpen(true)} />
 
       {view === 'inbox' && (
         <main className="inbox">
@@ -608,8 +624,8 @@ export default function App() {
                   <li>Tam turu başlat: son 30 güne bakarım, ~1 saat sürer. Sonra her 3 saatte bir artımlı tur atarım.</li>
                 </ol>
                 <div style={{ display: 'flex', gap: 8 }}>
-                  <button className="btn primary" onClick={() => void startRun('full')} disabled={!!stats?.collecting}>{stats?.collecting ? 'Tur dönüyor…' : 'Tam tur başlat'}</button>
-                  <button className="btn" onClick={() => setView('settings')}>Ayarlar</button>
+                  <Button size="sm" onClick={() => void startRun('full')} disabled={!!stats?.collecting}>{stats?.collecting ? 'Tur dönüyor…' : 'Tam tur başlat'}</Button>
+                  <Button variant="outline" size="sm" onClick={() => setView('settings')}>Ayarlar</Button>
                 </div>
               </div>
             </div>
@@ -641,10 +657,37 @@ export default function App() {
           onCvTips={() => void cvTips(detailJob)}
           onCheck={() => void checkLive(detailJob)}
           onReason={(r) => void setReason(detailJob.linkedinJobId, r)}
-          onDelete={() => void remove(detailJob)}
+          onDelete={() => setPendingDelete(detailJob)}
           onClose={() => setDetailId(null)}
         />
       )}
+      <CommandMenu
+        open={cmdOpen}
+        onOpenChange={setCmdOpen}
+        jobs={jobs}
+        onView={(v) => { setView(v); setDetailId(null) }}
+        onQueue={(q) => { setView('inbox'); setQueue(q); setSelectedId(null) }}
+        onOpenJob={(id) => { setView('inbox'); setQueue('all'); setFilters(EMPTY_FILTERS); setSelectedId(id); setDetailId(null) }}
+        onRun={(m) => void startRun(m)}
+        onScore={() => void startScore()}
+        onRescoreStale={staleCount ? () => void rescoreStale() : null}
+        onTheme={() => setDark((v) => !v)}
+      />
+      <AlertDialog open={!!pendingDelete} onOpenChange={(o) => !o && setPendingDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Bu ilanı sileyim mi?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingDelete ? `${pendingDelete.title} · ${pendingDelete.company ?? ''}. ` : ''}Notun ve kararın da gider. LinkedIn’de yine çıkarsa yeni ilan gibi geri eklerim; sadece
+              görmek istemiyorsan “Yoksay” daha iyi.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Vazgeç</AlertDialogCancel>
+            <AlertDialogAction variant="destructive" onClick={() => { const j = pendingDelete; setPendingDelete(null); if (j) void remove(j) }}>Sil</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <Toast toast={toast} />
     </div>
   )
