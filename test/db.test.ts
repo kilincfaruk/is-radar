@@ -81,6 +81,19 @@ setScore('4000000003', { score: 75, remote_verified: null, workplace: null, seni
 check('stale profile found', staleScoredJobs('new', 60, 10).some((r) => r.linkedin_job_id === '4000000003'))
 check('current profile not stale', !staleScoredJobs('old', 60, 10).some((r) => r.linkedin_job_id === '4000000003'))
 
+// ---- standalone HTML report
+const { buildReport } = await import('../src/report.ts')
+const xss = { ...card, linkedin_job_id: '4000000009', title: '<script>alert(1)</script> Analyst', company: 'Evil "Co"', url: 'javascript:alert(1)', location: 'Ankara' }
+upsertCard(xss)
+applyDetail({ linkedin_job_id: '4000000009', description_md: '**Görev** <img src=x onerror=alert(1)>\n- madde bir\n- madde iki' })
+setScore('4000000009', { score: 88, remote_verified: true, workplace: 'remote', seniority_fit: 'match', role_fit: 'core', summary: 'İyi "rol" <b>x</b>', pros: ['artı <i>'], cons: [], red_flags: [], model: 't', profile: 'p' })
+const rep = buildReport({ run: { id: 1, started_at: '2000-01-01T00:00:00.000Z', finished_at: null, kind: 'collect', searches: 0, cards: 0, new_jobs: 1, details: 0, scored: 1, researched: 0, requests: 0, rate_limited: 0, errors: 0, note: null, cost_usd: 0.12, claude_calls: 1, claude_ms: 1 }, threshold: 70 })
+check('report: ad text is escaped, no live markup', !rep.html.includes('<script>alert') && !rep.html.includes('<img src=x') && !rep.html.includes('<i>') && rep.html.includes('&lt;script&gt;alert(1)&lt;/script&gt;'))
+check('report: non-http link dropped', !rep.html.includes('javascript:alert'))
+check('report: description markdown rendered safely', rep.html.includes('<b>Görev</b>') && rep.html.includes('<li>madde bir</li>'))
+check('report: new good ad counted, repost hidden', rep.counts.newThisRound >= 1 && !rep.html.includes('id="4000000002"'))
+check('report: standalone (no external resources)', !/<(link|script)[^>]+(href|src)=/i.test(rep.html) && rep.html.includes('Claude $0.12'))
+
 // ---- request guard
 check('guard: dashboard GET', requestAllowed({ host: 'localhost:4545' }, 'GET', 4545))
 check('guard: same-origin POST', requestAllowed({ host: 'localhost:4545', origin: 'http://localhost:4545', 'sec-fetch-site': 'same-origin' }, 'POST', 4545))

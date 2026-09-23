@@ -9,6 +9,7 @@ import { importBackup } from './import-backup.ts'
 import { doctor } from './doctor.ts'
 import { cvReview, criteriaReview } from './pipeline/cv.ts'
 import { applyRadarConfig } from './radar.ts'
+import { writeReport } from './report.ts'
 import { loadSearches } from './config.ts'
 import { log } from './log.ts'
 
@@ -121,6 +122,11 @@ async function main() {
       await doctor()
       break
     }
+    case 'report': {
+      const r = writeReport()
+      log.info(`rapor yazıldı: ${r.file}\n  aynısı: ${r.latest}\n  ${r.counts.newThisRound} yeni iyi · ${r.counts.worth} bakmaya değer · ${r.counts.near} eşiğe yakın · ${r.counts.pursued} takipte`)
+      break
+    }
     case 'stats': {
       openDb()
       console.log(stats())
@@ -143,6 +149,7 @@ async function main() {
   npm run import    -- <is-radar-backup.json>
   npm run serve        (zamanlayıcı + http://localhost:${env('PORT', '4545')})
   npm run reset     -- [--scores | --texts | --all]   (önce data/backups/ altına .db yedeği alır)
+  npm run report       (tek dosyalık HTML rapor → data/reports/; her tur sonunda da otomatik yazılır)
   npm run doctor       (claude cli teşhisi: sürüm, ortam, hook'lar, örnek skorlama ham çıktısı)
   node --experimental-strip-types src/index.ts prescreen --recompute | stats`)
   }

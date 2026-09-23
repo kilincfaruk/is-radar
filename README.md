@@ -25,6 +25,10 @@ bir dashboard'da gösteren tek kişilik iş radarı. Backend yok, deploy yok: he
   (herkese açık JSON, login yok). Panodan kalkan ilan "kapandı" olur.
 - **Dashboard:** React, `http://localhost:4545`. Gelenler (kuyruklar + filtreler + klavyeyle triage), Shortlist, Sistem (turlar, süre/maliyet grafiği, canlı log, LinkedIn durumu), Ayarlar (eşik, aramalar, CV incelemesi, masaüstü bildirimi). URL hash görünümü/ilanı taşır, paylaşılabilir.
 - **CV araçları:** ilan başına "CV ipuçları" (bu ilana göre neyi öne çek, hangi maddeyi ilanın diliyle yeniden yaz, ilanda olup CV'de olmayan) ve en iyi N ilana toplu bakan **CV incelemesi**. Uydurma tecrübe önermez.
+- **HTML rapor:** her tur sonunda `data/reports/latest.html` (+ tarihli kopya): bu turda gelen iyi ilanlar, bakmaya
+  değerler, eşiğe yakınlar, takiptekiler; skor dökümü, artı/eksi, ilan metni. Tek dosya, internetsiz açılır, arama
+  kutusu var. Dashboard → Sistem / Shortlist'ten ya da `npm run report` ile istendiğinde de alınır. Notların ve
+  modelin sana göre yazdığı yorumlar da içindedir; başkasına göndermeden önce bir göz at.
 - **Bildirim:** Telegram (isteğe bağlı): skor, özet, en güçlü artı/eksi, çalışma şekli. Dashboard'da masaüstü bildirimi.
 - **Maliyet:** her `claude -p` çağrısının süresi ve CLI'nin bildirdiği maliyet tur başına kaydedilir; Sistem sekmesinde son turların süre / maliyet / yeni ilan grafiği ve toplam kullanım görünür.
 

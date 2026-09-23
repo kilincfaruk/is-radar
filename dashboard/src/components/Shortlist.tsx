@@ -52,6 +52,7 @@ export function Shortlist(p: Props) {
           <h1 style={{ margin: 0, fontSize: 22, fontWeight: 600 }}>Shortlist</h1>
           <div style={{ display: 'flex', gap: 12, alignItems: 'baseline', flexWrap: 'wrap' }}>
             <div style={{ fontSize: 13, color: 'var(--dim)' }}>Döneceğin yer burası: tam metin, şirket notu, ön yazı.</div>
+            <a className="btn sm" href="/api/report?download=1" title="Takiptekiler, bakmaya değerler ve yeni gelenler; tek dosya, internetsiz açılır">HTML rapor</a>
             <button className="btn sm" onClick={() => exportMarkdown(p.jobs, p.pre, p.threshold)} disabled={p.jobs.length === 0} title="Markdown tablo olarak indir, Notion/Obsidian'a yapıştırabilirsin">Dışa aktar (.md)</button>
           </div>
         </div>

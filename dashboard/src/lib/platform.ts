@@ -73,6 +73,7 @@ export const server = {
   getSettings: () => j<ServerSettings>('/api/settings'),
   saveSettings: async (s: { searchesYaml?: string; scoreThreshold?: number }) => void (await j('/api/settings', { method: 'PUT', body: JSON.stringify(s) })),
   saveRadar: async (radar: RadarPatch) => void (await j('/api/settings', { method: 'PUT', body: JSON.stringify({ radar }) })),
+  reports: () => j<Array<{ name: string; at: string; bytes: number }>>('/api/reports'),
   rescoreStale: () => j<{ ok: boolean; queued: number }>('/api/rescore-stale', { method: 'POST', body: '{}' }),
   prescreenNow: () => j<{ updated: number }>('/api/prescreen', { method: 'POST' }),
 }

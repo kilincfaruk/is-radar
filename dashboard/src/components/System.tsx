@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { server } from '@/lib/platform'
 import type { RunRow, ServerStats } from '@/lib/platform'
 import { LogPanel } from './LogPanel'
 import { jobLine } from './Header'
@@ -99,6 +100,11 @@ function FunnelRow({ n, label, tone }: { n: number; label: string; tone?: string
 
 export function System(p: Props) {
   const f = p.funnel
+  const [reports, setReports] = useState<Array<{ name: string; at: string; bytes: number }>>([])
+  const lastRunKey = `${p.runs[0]?.id ?? 0}:${p.runs[0]?.finished_at ?? ''}`
+  useEffect(() => {
+    server.reports().then(setReports).catch(() => {})
+  }, [lastRunKey])
   const [logOpen, setLogOpen] = useState<boolean>(() => {
     try {
       return localStorage.getItem('isradar.logOpen') === '1'
@@ -293,6 +299,33 @@ export function System(p: Props) {
 
         <div style={{ marginBottom: 26 }}>
           <LogPanel open={logOpen} onToggle={toggleLog} />
+        </div>
+
+        <div className="card" style={{ marginBottom: 26 }}>
+          <div className="eyebrow" style={{ marginBottom: 8 }}>HTML rapor</div>
+          <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 10 }}>
+            Her tur bitince tek dosyalık bir rapor yazıyorum: bu turda gelen iyi ilanlar, bakmaya değerler, eşiğe yakınlar ve takiptekiler.
+            İnternetsiz açılır, istediğine gönderebilirsin.
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            <a className="btn" href="/api/report" target="_blank" rel="noreferrer">Şimdiki durumu aç</a>
+            <a className="btn" href="/api/report?download=1">İndir (.html)</a>
+            {reports.length > 0 && <a className="link" href="/api/reports/latest.html" target="_blank" rel="noreferrer" style={{ fontSize: 13 }}>son tur raporu</a>}
+          </div>
+          {reports.length > 1 && (
+            <details style={{ marginTop: 10 }}>
+              <summary style={{ cursor: 'pointer', fontSize: 13, color: 'var(--muted)' }}>Önceki raporlar ({reports.length})</summary>
+              <div className="mono" style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 8, fontSize: 12 }}>
+                {reports.map((r) => (
+                  <span key={r.name}>
+                    <a className="link" href={`/api/reports/${r.name}`} target="_blank" rel="noreferrer">{fmtWhen(r.at)}</a>
+                    <span style={{ color: 'var(--dim)' }}> · {Math.round(r.bytes / 1024)} KB · </span>
+                    <a className="link" href={`/api/reports/${r.name}?download=1`}>indir</a>
+                  </span>
+                ))}
+              </div>
+            </details>
+          )}
         </div>
 
         <div className="hr" style={{ marginBottom: 10 }}>

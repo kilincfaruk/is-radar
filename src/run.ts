@@ -2,7 +2,8 @@
 import { loadSearches, ensureDirs, env, type RunMode } from './config.ts'
 import { PoliteHttp, RateLimitedError, sleep } from './http.ts'
 import { parseSearchPage, parseDetailPage, searchUrl, detailUrl, saveSample } from './sources/linkedin-guest.ts'
-import { upsertCard, applyDetail, markDescriptionMissing, jobsNeedingDescription, startRun, updateRun, openDb, allJobs, getSetting, setSetting, knownJobIds, lastCompletedFullSearch, markClosed, markChecked, jobsNeedingLivenessCheck, linkDuplicates, closeMissingFromBoard, skippedJobs, releaseSkipped, type JobRow } from './db.ts'
+import { upsertCard, applyDetail, markDescriptionMissing, jobsNeedingDescription, startRun, updateRun, openDb, allJobs, getSetting, setSetting, knownJobIds, lastCompletedFullSearch, markClosed, markChecked, jobsNeedingLivenessCheck, linkDuplicates, closeMissingFromBoard, skippedJobs, releaseSkipped, recentRuns, type JobRow } from './db.ts'
+import { writeReport } from './report.ts'
 import { fetchBoard, atsId, atsSource } from './sources/ats.ts'
 import { runPrescreen, runScoringWhile, runTopScoring } from './pipeline/score.ts'
 import { titleGate, detectRole } from './shared/prescreen.ts'
@@ -302,6 +303,15 @@ export async function collectRound(o: RunOptions = {}): Promise<number> {
       errors: http.stats.errors,
     })
     current = null
+    // standalone HTML report of the state after this round (data/reports/latest.html); never breaks the round
+    if (env('REPORT_AFTER_RUN', '1') !== '0') {
+      try {
+        const rep = writeReport({ run: recentRuns(1)[0] ?? null })
+        log.info(`rapor: ${rep.file} (${rep.counts.newThisRound} yeni iyi, ${rep.counts.worth} bakmaya değer, ${rep.counts.pursued} takipte)`)
+      } catch (e) {
+        log.warn('rapor yazılamadı:', e instanceof Error ? e.message : String(e))
+      }
+    }
     log.info(`tur bitti (${mode}, ${Math.round((Date.now() - t0) / 1000)} sn): ${searchesDone} arama, ${cards} kart, ${newJobs} yeni, ${details} metin, ${pre} ön eleme, ${scored} skor, ${researched} araştırma, ${http.stats.requests} istek, ${http.stats.rateLimited} 429${used.calls ? `, claude ${used.calls} çağrı${used.costUsd ? ` $${used.costUsd.toFixed(2)}` : ''}` : ''}${crashed ? ' · HATAYLA bitti' : ''}`)
   }
   return runId

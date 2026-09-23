@@ -13,6 +13,7 @@ import { cvTipsOne, cvReview, readCvReview, criteriaReview, readCriteriaReview }
 import { researchOne } from '../pipeline/research.ts'
 import { coverLetterSystem } from '../shared/prompt.ts'
 import { applyRadarConfig } from '../radar.ts'
+import { buildReport, listReports, REPORTS_DIR } from '../report.ts'
 import { computeScore, DEFAULT_WEIGHTS, type Facts } from '../shared/scoring.ts'
 import { HOME_CITIES, THRESHOLDS } from '../shared/prescreen.ts'
 import { runClaudeText } from '../pipeline/claude-cli.ts'
@@ -171,6 +172,21 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, ur
     return json(res, 200, { ...s, profileHash: profileHash(), task, progress: currentProgress(), collecting, schedule: scheduleInfo(s.lastRun?.finished_at ?? null) })
   }
   if (m === 'GET' && p === '/api/runs') return json(res, 200, recentRuns(30))
+  if (m === 'GET' && p === '/api/report') {
+    // fresh report of the current state; ?download=1 saves it as a file instead of opening it
+    const r = buildReport()
+    const name = `is-radar-${new Date().toISOString().slice(0, 10)}.html`
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', ...(url.searchParams.get('download') ? { 'content-disposition': `attachment; filename="${name}"` } : {}) })
+    return void res.end(r.html)
+  }
+  if (m === 'GET' && p === '/api/reports') return json(res, 200, listReports())
+  const repName = id(/^\/api\/reports\/((?:is-radar-[\d-]+|latest)\.html)$/)
+  if (m === 'GET' && repName) {
+    const f = path.join(REPORTS_DIR, repName)
+    if (!fs.existsSync(f)) return json(res, 404, { error: 'Bu raporu bulamadım' })
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', ...(url.searchParams.get('download') ? { 'content-disposition': `attachment; filename="${repName}"` } : {}) })
+    return void fs.createReadStream(f).pipe(res)
+  }
   if (m === 'GET' && p === '/api/log') return json(res, 200, logLines(Number(url.searchParams.get('since') || 0), Number(url.searchParams.get('limit') || 300)))
   if (m === 'GET' && p === '/api/settings') {
     const cfg = loadSearches()

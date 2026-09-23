@@ -18,6 +18,7 @@
     "doctor": "node --experimental-strip-types --no-warnings=ExperimentalWarning src/index.ts doctor",
     "cv-review": "node --experimental-strip-types --no-warnings=ExperimentalWarning src/index.ts cv-review",
     "criteria-review": "node --experimental-strip-types --no-warnings=ExperimentalWarning src/index.ts criteria-review",
+    "report": "node --experimental-strip-types --no-warnings=ExperimentalWarning src/index.ts report",
     "build": "vite build",
     "dev": "vite build --watch",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.dashboard.json",
