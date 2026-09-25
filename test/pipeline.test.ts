@@ -148,6 +148,19 @@ check('district match is whole-word (Selçuklu ≠ Selçuk)', matchHomeCity('Sel
 configurePrescreen(null)
 check('family: reset restores BA gate', titleGate('Business Analyst') === null && titleGate('Kalite Kontrol Mühendisi') !== null)
 
+// ---- roles_add: support titles as a plan B on top of the built-in BA/PO family
+check('support gated by default (customer success is built-in adjacent)', titleGate('L2 Support Engineer') !== null && titleGate('Technical Support Specialist') !== null && detectRole('Customer Success Specialist', '').role === 'adjacent')
+configurePrescreen({ roles_add: { bridge: ['technical support', 'teknik destek', 'application support', 'l2 support', 'customer support', 'uygulama destek', 'customer success'] } })
+check('roles_add: support titles pass the gate', titleGate('L2 Support Engineer') === null && titleGate('Teknik Destek Uzmanı') === null && titleGate('Customer Support Specialist') === null && titleGate('Application Support Specialist (SaaS)') === null && detectRole('Customer Success Specialist', '').role === 'adjacent')
+check('roles_add: tier is bridge, not mismatch', detectRole('Technical Support Specialist', '').role === 'bridge' && detectRole('Uygulama Destek Uzmanı', '').role === 'bridge')
+check('roles_add: built-in family untouched', titleGate('Business Analyst') === null && detectRole('Product Owner', '').role === 'core' && titleGate('Satış Temsilcisi') !== null)
+check('roles_add: never downgrades a built-in adjacent title', detectRole('Customer Success Specialist', '').role === 'adjacent')
+check('roles_add: managerial / intern still gated', titleGate('Customer Support Team Lead') === 'başlık yöneticilik' && titleGate('Teknik Destek Stajyer') !== null)
+const sup = prescreen({ title: 'L2 Application Support Engineer', descriptionMd: 'SaaS ürünümüzün müşteri sorunlarını analiz eder, SQL ile inceler, Jira ile ürün ekibine aktarırsın. Tam remote. En az 2 yıl deneyim.' + ' '.repeat(10), workplaceType: 'unknown', location: 'Türkiye' })!
+check('roles_add: support ad reaches the LLM (not reject)', sup.verdict !== 'reject' && sup.role === 'bridge', sup)
+configurePrescreen(null)
+check('roles_add: reset gates support again', titleGate('L2 Support Engineer') !== null)
+
 // ---- cv tips markdown
 const md = tipsToMarkdown({ fit_line: 'x', foreground: ['a'], rewrites: [{ original: 'o', suggested: 's', why: 'w' }], missing: [], avoid: ['z'] })
 check('tips markdown sections', md.includes('**Konumlanma:** x') && md.includes('~~o~~') && md.includes('→ s') && !md.includes('İlanda var') && md.includes('**Geri çek**'))

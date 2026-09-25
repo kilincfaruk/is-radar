@@ -39,10 +39,16 @@ export type RadarConfig = {
   salary_min_tl?: number
   /** Office work in an accepted city is the norm for this role family (field / production jobs): no cap for it. */
   onsite_ok?: boolean
+  /**
+   * Titles ADDED to a tier on top of the built-in dictionaries (roles replaces, roles_add extends). They win over the
+   * built-in exclusions: e.g. bridge: ["technical support", "customer success"] keeps support ads as a plan B instead
+   * of gating them.
+   */
+  roles_add?: { core?: string[]; adjacent?: string[]; bridge?: string[] }
 }
 
 /** Live options derived from the radar block (mutated by configurePrescreen). */
-export const RADAR = { customFamily: false, salaryMinTl: 90_000, onsiteOk: false, bonus: null as Array<{ rx: RegExp; label: string }> | null }
+export const RADAR = { customFamily: false, salaryMinTl: 90_000, onsiteOk: false, bonus: null as Array<{ rx: RegExp; label: string }> | null, extra: [] as Array<{ tier: 'core' | 'adjacent' | 'bridge'; rx: RegExp }> }
 
 /** Verdict cut-offs on the rule score (mutable via configurePrescreen). */
 export const THRESHOLDS = { review: 35, candidate: 60 }
@@ -72,6 +78,11 @@ export function phrasesToRegex(phrases: string[]): RegExp {
   return new RegExp(alts.length ? alts.map((a) => `^${a}`).join('|') : '(?!)', 'i')
 }
 
+/** Tier of a title added through radar.roles_add (checked before the built-in dictionaries), or null. */
+function extraTier(t: string): 'core' | 'adjacent' | 'bridge' | null {
+  return RADAR.extra.find((e) => e.rx.test(t))?.tier ?? null
+}
+
 /** Which yaml phrase of a tier hit the title (for readable gate reasons). */
 const ROLE_PHRASES: Partial<Record<'core' | 'adjacent' | 'bridge' | 'mismatch', Array<{ label: string; rx: RegExp }>>> = {}
 function phraseHit(tier: 'core' | 'adjacent' | 'bridge' | 'mismatch', t: string): string | undefined {
@@ -98,6 +109,10 @@ export function configurePrescreen(cfg: RadarConfig | null | undefined): void {
   const sm = Number(cfg?.salary_min_tl)
   RADAR.salaryMinTl = cfg?.salary_min_tl === undefined || !Number.isFinite(sm) ? 90_000 : Math.max(0, sm)
   RADAR.onsiteOk = cfg?.onsite_ok === true
+  RADAR.extra = (['core', 'adjacent', 'bridge'] as const).flatMap((tier) => {
+    const list = (cfg?.roles_add?.[tier] ?? []).map((x) => String(x).trim()).filter(Boolean)
+    return list.length ? [{ tier, rx: phrasesToRegex(list) }] : []
+  })
   const bonus = (cfg?.bonus ?? []).map((b) => String(b).trim()).filter(Boolean)
   RADAR.bonus = bonus.length ? bonus.map((b) => ({ rx: phrasesToRegex([b]), label: b })) : RADAR.customFamily ? [] : null
 }
@@ -252,6 +267,12 @@ export function titleGate(titleIn: string): string | null {
   // "Bangkok-based", "Dubai-based": the job sits abroad whatever the LinkedIn location says
   if (/\b(?!(ankara|izmir|manisa|aydın|istanbul|türkiye|turkey|remote|home|tr)-)[a-zçğıöşü]+-based\b/.test(t)) return 'başlık: yurt dışı lokasyon'
   if (/\b(bangkok|dubai|riyadh|riyad|doha|cairo|kahire|berlin|london|londra|amsterdam|paris|warsaw|varşova|bucharest|bükreş|singapore|singapur)\b/.test(t)) return 'başlık: yurt dışı lokasyon'
+  // titles the user added (radar.roles_add) are kept whatever the built-in exclusion lists say
+  if (extraTier(t) && !(RADAR.customFamily && ROLE.mismatch.test(t))) {
+    if (RX.managerial.test(t) && !RX.pmTitle.test(t)) return 'başlık yöneticilik'
+    if (RX.intern.test(t)) return 'başlık stajyer/yeni mezun'
+    return null
+  }
   if (RADAR.customFamily) {
     // another role family (radar.roles.core set in the yaml): exclusions first, then only the dictionaries
     if (ROLE.mismatch.test(t)) return 'başlık: ' + (phraseHit('mismatch', t) ?? 'alakasız rol')
@@ -288,7 +309,8 @@ export function titleGate(titleIn: string): string | null {
 /** True when the title explicitly hits a core / adjacent / bridge phrase (detectRole falls back to 'bridge' for anything). */
 export function titleInRoleFamily(titleIn: string): boolean {
   const t = fold(titleIn)
-  if (ROLE.mismatch.test(t) && (RADAR.customFamily || !ROLE.core.test(t))) return false
+  if (ROLE.mismatch.test(t) && (RADAR.customFamily || !ROLE.core.test(t)) && !(extraTier(t) && !RADAR.customFamily)) return false
+  if (extraTier(t)) return true
   return ROLE.core.test(t) || ROLE.adjacent.test(t) || ROLE.bridge.test(t)
 }
 
@@ -296,7 +318,12 @@ export function detectRole(titleIn: string, descriptionIn: string): { role: Role
   const t = fold(titleIn)
   const description = fold(descriptionIn)
   let role: RoleFit
+  // an added title never downgrades a built-in match: the higher tier of the two wins
+  const builtIn: RoleFit | null = ROLE.core.test(t) ? 'core' : ROLE.adjacent.test(t) ? 'adjacent' : null
+  const extraRaw = extraTier(t)
+  const extra = extraRaw && builtIn && ['core', 'adjacent', 'bridge'].indexOf(builtIn) < ['core', 'adjacent', 'bridge'].indexOf(extraRaw) ? null : extraRaw
   if (RADAR.customFamily && ROLE.mismatch.test(t)) role = 'mismatch'
+  else if (extra) role = extra
   else if (ROLE.core.test(t) && !/technical\s*business\s*analyst|teknik\s*iş\s*analisti/i.test(t)) role = 'core'
   else if (ROLE.adjacent.test(t)) role = 'adjacent'
   else if (ROLE.mismatch.test(t)) role = 'mismatch'

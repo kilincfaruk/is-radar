@@ -24,6 +24,11 @@ radar:
   # Başka bir meslek için (ör. kalite kontrol mühendisi, muhasebeci): roles.core'u doldur. core doluysa BA/PO'ya göre
   # yazılmış yerleşik başlık filtreleri kapanır, sadece bu sözlükler geçerli olur; önce mismatch'e bakılır. İfadedeki
   # kelimeler başlıkta sırası fark etmeden ve Türkçe ekleriyle aranır ("kalite mühendisi" → "Ürün Kalitesi Mühendisi").
+  # roles_add: yerleşik sözlüğü değiştirmeden bir kademeye başlık EKLER; yerleşik "elenen" listesini ezer, yerleşik
+  # core/adjacent eşleşmesini aşağı düşürmez. Örnek: BA/PO hedefinin yanında plan B olarak yazılım destek:
+  # roles_add:
+  #   bridge: ["technical support", "teknik destek", "application support", "uygulama destek", "software support",
+  #            "customer support", "destek uzmanı", "support engineer", "l2 support", "technical account manager"]
   # onsite_ok: true       # iş yerinde çalışmak bu meslekte normal (üretim, saha): kabul edilen şehirde ofis cezası yok
   # salary_min_tl: 90000  # maaşı yazan ilanda bu rakamın altı cezalı; 0 = kapalı
   # bonus: ["savunma", "as9100"]   # kural motorunun +5 bonus kelimeleri; yerleşik listenin yerine geçer
