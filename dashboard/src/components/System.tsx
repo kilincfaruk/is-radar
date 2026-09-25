@@ -249,10 +249,15 @@ export function System(p: Props) {
             <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--line)', display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', fontSize: 13 }}>
               <span className="mono" style={{ color: 'var(--muted)' }}>eşikler: reject &lt; {p.thresholds.review} · review &lt; {p.thresholds.candidate} · candidate ≥ {p.thresholds.candidate}</span>
               {p.suggestion ? (
-                p.suggestion.agree - p.suggestion.current.agree >= Math.max(2, Math.ceil(p.suggestion.scored * 0.05)) ? (
+                p.suggestion.agree - p.suggestion.current.agree >= Math.max(2, Math.ceil(p.suggestion.scored * 0.05)) || p.suggestion.missed < p.suggestion.current.missed ? (
                   <>
+                    {p.suggestion.current.missed > 0 && (
+                      <span style={{ color: 'var(--red)', flexBasis: '100%' }}>
+                        Şu anki eşiklerle Claude'un {p.threshold - 10}+ verdiği {p.suggestion.current.missed} ilanı kural motoru eliyor; bunlar bir daha okunmaz.
+                      </span>
+                    )}
                     <span style={{ color: 'var(--accent)' }}>
-                      Öneri: review ≥ {p.suggestion.review}, candidate ≥ {p.suggestion.candidate} → hemfikir %{Math.round((p.suggestion.agree / p.suggestion.scored) * 100)} (şu an %{Math.round((p.suggestion.current.agree / p.suggestion.scored) * 100)})
+                      Öneri: review ≥ {p.suggestion.review}, candidate ≥ {p.suggestion.candidate} → hemfikir %{Math.round((p.suggestion.agree / p.suggestion.scored) * 100)} (şu an %{Math.round((p.suggestion.current.agree / p.suggestion.scored) * 100)}), elenen iyi ilan {p.suggestion.missed}
                     </span>
                     <Button variant="outline" size="sm" className="h-7 px-2.5 text-xs" onClick={() => p.onApplyThresholds({ review: p.suggestion!.review, candidate: p.suggestion!.candidate })}>Uygula</Button>
                   </>

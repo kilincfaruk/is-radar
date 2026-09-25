@@ -3,6 +3,7 @@ import type { Job, JobStatus, RoleFit, SeniorityFit } from './types'
 import { prescreen, type PreScreen } from './prescreen'
 import { resolveWorkplace, type CityClass, type WorkplaceKind } from './workplace'
 import { daysSince, fmtWhen, rel } from './utils'
+import { pickThresholds } from '@shared/calibrate'
 
 export type Tone = 'ok' | 'warn' | 'bad' | 'dim' | 'text'
 export const TONE: Record<Tone, string> = { ok: 'var(--accent)', warn: 'var(--amber)', bad: 'var(--red)', dim: 'var(--dim)', text: 'var(--text)' }
@@ -146,18 +147,12 @@ export function calibration(jobs: Job[], view: (j: Job) => JobView, threshold: n
  * Returns null with fewer than MIN_CALIB_ROWS scored ads (too noisy to tune on).
  */
 export const MIN_CALIB_ROWS = 20
-export type ThresholdSuggestion = { review: number; candidate: number; agree: number; current: { review: number; candidate: number; agree: number }; scored: number }
+export type ThresholdSuggestion = { review: number; candidate: number; agree: number; missed: number; current: { review: number; candidate: number; agree: number; missed: number }; scored: number; good: number }
 export function suggestThresholds(jobs: Job[], view: (j: Job) => JobView, llmThreshold: number, current: { review: number; candidate: number }): ThresholdSuggestion | null {
   const rows = jobs.filter((j) => view(j).score != null).map((j) => ({ rule: view(j).pre.score, llm: view(j).score as number }))
   if (rows.length < MIN_CALIB_ROWS) return null
-  const band = (s: number) => (s < 40 ? 0 : s < llmThreshold ? 1 : 2)
-  const agreeFor = (a: number, b: number) => rows.filter((r) => (r.rule < a ? 0 : r.rule < b ? 1 : 2) === band(r.llm)).length
-  let best = { review: current.review, candidate: current.candidate, agree: agreeFor(current.review, current.candidate) }
-  for (let a = 15; a <= 70; a += 5) for (let b = a + 10; b <= 90; b += 5) {
-    const n = agreeFor(a, b)
-    if (n > best.agree) best = { review: a, candidate: b, agree: n }
-  }
-  return { ...best, current: { ...current, agree: agreeFor(current.review, current.candidate) }, scored: rows.length }
+  const r = pickThresholds(rows, llmThreshold, current)
+  return { ...r.best, current: r.current, scored: rows.length, good: rows.filter((x) => x.llm >= llmThreshold - 10).length }
 }
 
 export function postedDays(j: Job): number {

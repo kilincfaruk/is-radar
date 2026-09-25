@@ -161,6 +161,15 @@ check('roles_add: support ad reaches the LLM (not reject)', sup.verdict !== 'rej
 configurePrescreen(null)
 check('roles_add: reset gates support again', titleGate('L2 Support Engineer') !== null)
 
+// ---- threshold suggestion: never trades good ads for agreement
+const { pickThresholds } = await import('../src/shared/calibrate.ts')
+// 80 weak ads (rule 40-60, LLM 10-35) and 10 good ones (rule 50-65, LLM 70-85): "reject everything" maximises plain agreement
+const CR = [...Array.from({ length: 80 }, (_, i) => ({ rule: 40 + (i % 21), llm: 10 + (i % 26) })), ...Array.from({ length: 10 }, (_, i) => ({ rule: 50 + i, llm: 70 + i }))]
+const pk = pickThresholds(CR, 70, { review: 35, candidate: 60 })
+check('calibrate: suggestion never rejects good ads', pk.best.missed === 0 && pk.best.review <= 50, pk.best)
+const strict = pickThresholds(CR, 70, { review: 70, candidate: 85 })
+check('calibrate: too-strict setting is detected and loosened', strict.current.missed === 10 && strict.best.missed < strict.current.missed && strict.best.review <= 50, strict)
+
 // ---- cv tips markdown
 const md = tipsToMarkdown({ fit_line: 'x', foreground: ['a'], rewrites: [{ original: 'o', suggested: 's', why: 'w' }], missing: [], avoid: ['z'] })
 check('tips markdown sections', md.includes('**Konumlanma:** x') && md.includes('~~o~~') && md.includes('→ s') && !md.includes('İlanda var') && md.includes('**Geri çek**'))
