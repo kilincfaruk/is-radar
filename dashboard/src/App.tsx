@@ -497,12 +497,14 @@ export default function App() {
     try {
       const r = await server.startScoring(500, false, true)
       if (r.ok) showToast(`${r.queued} ilanı skorluyorum${r.retried ? `, ${r.retried} hatalıyı da yeniden deneyeceğim` : ''}`)
-      else showToast(`Skorlayacak ilan bulamadım: ${r.rejects ?? 0} ilanı ön elemede eledim, ${r.errors ?? 0} tanesi hatalı.`, { kind: 'error' })
+      else showToast(`Skorlayacak ilan kalmadı: ${r.rejects ?? 0} ilanı ön elemede eledim${r.dups ? `, ${r.dups} tanesi tekrar yayın (orijinaliyle birlikte gidiyor)` : ''}${r.errors ? `, ${r.errors} tanesi hatalı` : ''}.`)
+      // the server re-ran the rule engine before answering: pull the fresh verdicts so the counters match
+      void reload()
       void pollStats()
     } catch (e) {
       showToast(e instanceof Error ? e.message : String(e), { kind: 'error' })
     }
-  }, [showToast, pollStats])
+  }, [showToast, pollStats, reload])
 
   // ---- keyboard
   // Ctrl/Cmd+K opens the command palette from anywhere, inputs included

@@ -375,8 +375,10 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, ur
     const queued = jobsNeedingScore(limit, !!b.includeRejects).length
     if (queued === 0) {
       const errors = (openDb().prepare('SELECT COUNT(*) n FROM jobs WHERE score_error IS NOT NULL AND scored_at IS NULL').get() as { n: number }).n
-      const rejects = (openDb().prepare("SELECT COUNT(*) n FROM jobs WHERE pre_verdict = 'reject' AND scored_at IS NULL AND description_md IS NOT NULL").get() as { n: number }).n
-      return json(res, 200, { ok: false, queued: 0, errors, rejects, retried })
+      const rejects = (openDb().prepare("SELECT COUNT(*) n FROM jobs WHERE dup_of IS NULL AND pre_verdict = 'reject' AND scored_at IS NULL AND description_md IS NOT NULL").get() as { n: number }).n
+      // reposts are never scored themselves (their original carries the score): say so instead of looking like a bug
+      const dups = (openDb().prepare("SELECT COUNT(*) n FROM jobs WHERE dup_of IS NOT NULL AND scored_at IS NULL AND description_md IS NOT NULL AND description_md != '' AND status NOT IN ('rejected','ignored')").get() as { n: number }).n
+      return json(res, 200, { ok: false, queued: 0, errors, rejects, dups, retried })
     }
     await runTask('score', queued, (progress) => runScoring(limit, !!b.includeRejects, progress))
     return json(res, 202, { ok: true, queued, retried })

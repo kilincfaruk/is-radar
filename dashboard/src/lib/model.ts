@@ -274,11 +274,13 @@ export function wordCount(md: string | null | undefined): number {
 }
 
 /** Why a job has no LLM score yet, one bucket per job; `queued` is exactly what the server will score next. */
-export type ScoreFunnel = { total: number; scored: number; queued: number; errored: number; ruleReject: number; noText: number; skipped: number; decided: number }
+export type ScoreFunnel = { total: number; scored: number; queued: number; errored: number; ruleReject: number; noText: number; skipped: number; decided: number; dups: number }
 export function scoreFunnel(jobs: Job[], pre: (j: Job) => PreScreen): ScoreFunnel {
-  const f: ScoreFunnel = { total: jobs.length, scored: 0, queued: 0, errored: 0, ruleReject: 0, noText: 0, skipped: 0, decided: 0 }
+  const f: ScoreFunnel = { total: jobs.length, scored: 0, queued: 0, errored: 0, ruleReject: 0, noText: 0, skipped: 0, decided: 0, dups: 0 }
   for (const j of jobs) {
+    // same order of rules as the server's score queue (db.jobsNeedingScore): reposts first, they are never scored themselves
     if (j.scoredAt) f.scored++
+    else if (j.dupOf) f.dups++
     else if (!j.descriptionMd) {
       if (j.descriptionSkipped) f.skipped++
       else f.noText++

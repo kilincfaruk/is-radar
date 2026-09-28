@@ -165,6 +165,7 @@ export function System(p: Props) {
               <FunnelRow n={f.decided} label="sen eledin · yoksay/reddet" />
               <FunnelRow n={f.noText} label="metni yok · sonraki turda çekerim" tone={f.noText ? 'var(--amber)' : undefined} />
               <FunnelRow n={f.skipped} label="başlık kapısı · metni bilerek çekmedim" />
+              <FunnelRow n={f.dups} label="tekrar yayın · orijinaliyle birlikte gider, ayrıca skorlanmaz" />
             </div>
             <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 12 }}>
               {sch ? `Her ${sch.everyMinutes} dk, ${String(sch.activeHours[0]).padStart(2, '0')}–${String(sch.activeHours[1]).padStart(2, '0')}` : '—'}

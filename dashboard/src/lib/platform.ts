@@ -56,7 +56,7 @@ export const server = {
   log: (since = 0, limit = 300) => j<LogLine[]>(`/api/log?since=${since}&limit=${limit}`),
   startRun: async (mode?: 'full' | 'incremental') => void (await j('/api/run', { method: 'POST', body: JSON.stringify(mode ? { mode } : {}) })),
   startScoring: (limit: number, includeRejects: boolean, retryErrors = true) =>
-    j<{ ok: boolean; queued: number; errors?: number; rejects?: number; retried?: number }>('/api/score', { method: 'POST', body: JSON.stringify({ limit, includeRejects, retryErrors }) }),
+    j<{ ok: boolean; queued: number; errors?: number; rejects?: number; dups?: number; retried?: number }>('/api/score', { method: 'POST', body: JSON.stringify({ limit, includeRejects, retryErrors }) }),
   rescore: async (id: string) => void (await j(`/api/jobs/${id}/rescore`, { method: 'POST' })),
   research: async (id: string) => void (await j(`/api/jobs/${id}/research`, { method: 'POST' })),
   coverLetter: async (id: string): Promise<string> => {
