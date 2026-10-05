@@ -5,7 +5,7 @@ import path from 'node:path'
 
 process.env.SCORER = 'none'
 process.env.TELEGRAM_BOT_TOKEN = ''
-const { openDb, closeDb, LATEST_MIGRATION, upsertCard, closeStaleRuns, startRun, recentRuns, getJob, updateUserFields, linkDuplicates, markClosed, jobsChangedSince, staleScoredJobs, setScore, jobsNeedingScore, applyDetail } = await import('../src/db.ts')
+const { openDb, closeDb, LATEST_MIGRATION, upsertCard, closeStaleRuns, startRun, recentRuns, getJob, updateUserFields, linkDuplicates, markClosed, jobsChangedSince, staleScoredJobs, setScore, jobsNeedingScore, applyDetail, clearScores, recomputeScores } = await import('../src/db.ts')
 const { dupKey } = await import('../src/shared/jobs.ts')
 const { requestAllowed } = await import('../src/web/server.ts')
 
@@ -93,6 +93,18 @@ check('report: non-http link dropped', !rep.html.includes('javascript:alert'))
 check('report: description markdown rendered safely', rep.html.includes('<b>Görev</b>') && rep.html.includes('<li>madde bir</li>'))
 check('report: new good ad counted, repost hidden', rep.counts.newThisRound >= 1 && !rep.html.includes('id="4000000002"'))
 check('report: standalone (no external resources)', !/<(link|script)[^>]+(href|src)=/i.test(rep.html) && rep.html.includes('Claude $0.12'))
+
+// ---- score reset keeps the user's decisions and does not resurrect scores from stored facts
+upsertCard({ ...card, linkedin_job_id: '4000000020', title: 'Product Owner' })
+const facts = { fit: 80, role_fit: 'core', seniority_fit: 'match', people_manager: false, workplace: 'remote', remote_verified: true, english: 'none', salary_below_min: null, employment: 'full_time', agency: false, shift: false, ai_usage: false }
+setScore('4000000020', { score: 90, remote_verified: true, workplace: 'remote', seniority_fit: 'match', role_fit: 'core', summary: 's', pros: [], cons: [], red_flags: [], model: 't', profile: 'p', facts: facts as never })
+updateUserFields('4000000020', { status: 'applied', notes: 'mülakat salı' })
+clearScores()
+const cleared = getJob('4000000020')!
+check('reset: status and notes stay', cleared.status === 'applied' && cleared.notes === 'mülakat salı', cleared)
+check('reset: score, facts and profile dropped', cleared.score === null && cleared.scored_at === null && cleared.facts_json === null && cleared.score_profile === null)
+recomputeScores()
+check('reset: weight change does not bring the old score back', getJob('4000000020')!.score === null)
 
 // ---- request guard
 check('guard: dashboard GET', requestAllowed({ host: 'localhost:4545' }, 'GET', 4545))

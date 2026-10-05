@@ -358,7 +358,8 @@ export function backupDb(): string {
 export function clearScores(): void {
   openDb().exec(`UPDATE jobs SET score = NULL, scored_at = NULL, score_model = NULL, score_error = NULL, summary = NULL,
     pros_json = '[]', cons_json = '[]', red_flags_json = '[]', remote_verified = NULL, workplace_llm = NULL,
-    seniority_fit = NULL, role_fit = NULL, workplace_detail = NULL, salary_note = NULL, english_level = NULL, ai_usage = NULL`)
+    seniority_fit = NULL, role_fit = NULL, workplace_detail = NULL, salary_note = NULL, english_level = NULL, ai_usage = NULL,
+    facts_json = NULL, score_profile = NULL`)
   // rule verdicts are recomputed from the text; rows the title gate rejected without text keep theirs
   openDb().exec(`UPDATE jobs SET pre_verdict = NULL, pre_score = NULL, pre_json = NULL WHERE description_md IS NOT NULL AND description_md != ''`)
 }
@@ -532,7 +533,7 @@ export function staleScoredJobs(profile: string, minScore: number, limit: number
 /** Re-apply the current weights to every score that has stored facts (no LLM call). Returns how many changed. */
 export function recomputeScores(): number {
   const d = openDb()
-  const rows = d.prepare('SELECT linkedin_job_id id, facts_json, location, score FROM jobs WHERE facts_json IS NOT NULL').all() as Array<{ id: string; facts_json: string; location: string | null; score: number | null }>
+  const rows = d.prepare('SELECT linkedin_job_id id, facts_json, location, score FROM jobs WHERE facts_json IS NOT NULL AND scored_at IS NOT NULL').all() as Array<{ id: string; facts_json: string; location: string | null; score: number | null }>
   const set = d.prepare('UPDATE jobs SET score = ? WHERE linkedin_job_id = ?')
   let n = 0
   for (const r of rows) {
