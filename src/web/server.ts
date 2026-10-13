@@ -6,8 +6,7 @@ import { PUBLIC_DIR, SEARCHES_FILE, env, loadSearches } from '../config.ts'
 import YAML from 'yaml'
 import type { RadarConfig } from '../shared/prescreen.ts'
 import { allJobs, getJob, updateUserFields, deleteJob, stats, recentRuns, openDb, resetScore, setScore, setSetting, getSetting, type JobRow, nowIso, clearScoreErrors, jobsNeedingScore, closeStaleRuns, jobsChangedSince, staleScoredJobs, linkDuplicates } from '../db.ts'
-import { collectRound, currentProgress, checkLiveness } from '../run.ts'
-import { PoliteHttp } from '../http.ts'
+import { collectRound, currentProgress, checkLiveness, linkedinHttp, linkedinCooldownLeft } from '../run.ts'
 import { topModel, runScoring, runPrescreen, scoreOne, scoringSystem, scoreRows } from '../pipeline/score.ts'
 import { cvTipsOne, cvReview, readCvReview, criteriaReview, readCriteriaReview } from '../pipeline/cv.ts'
 import { researchOne } from '../pipeline/research.ts'
@@ -87,7 +86,7 @@ export function rowToJob(r: JobRow) {
 
 type Task = { kind: string; startedAt: string; done: number; total: number; note?: string }
 /** One polite client for manual checks from the dashboard (keeps the LinkedIn pacing even outside a round). */
-const liveHttp = new PoliteHttp({ minGapMs: 3000, maxGapMs: 6000 })
+const liveHttp = linkedinHttp({ minGapMs: 3000, maxGapMs: 6000 })
 let task: Task | null = null
 let collecting = false
 
@@ -335,6 +334,8 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, ur
     if (!r) return json(res, 404, { error: 'Bu ilanı bulamadım' })
     if (r.source !== 'linkedin-guest') return json(res, 200, { closed: !!r.closed_at, reason: r.closed_at ? r.closed_reason ?? 'kapalı' : 'şirket panosu her turda kontrol ediliyor', job: rowToJob(r) })
     if (collecting) return json(res, 409, { error: 'Şu an tur dönüyor, LinkedIn kuyruğu dolu. Tur bitince bir daha dene.' })
+    const cooling = linkedinCooldownLeft()
+    if (cooling) return json(res, 409, { error: `LinkedIn bu IP'yi kıstı, ${cooling} dk daha istek atmıyorum. Sonra bir daha dene.` })
     const out = await checkLiveness(liveHttp, checkId)
     return json(res, 200, { ...out, job: rowToJob(getJob(checkId)!) })
   }

@@ -1,6 +1,6 @@
 /** One collection round: searches → cards → details → prescreen → (score) → (research) → (notify). */
 import { loadSearches, ensureDirs, env, type RunMode } from './config.ts'
-import { PoliteHttp, RateLimitedError, sleep } from './http.ts'
+import { PoliteHttp, RateLimitedError, sleep, type HttpOptions } from './http.ts'
 import { parseSearchPage, parseDetailPage, searchUrl, detailUrl, saveSample } from './sources/linkedin-guest.ts'
 import { upsertCard, applyDetail, markDescriptionMissing, jobsNeedingDescription, startRun, updateRun, openDb, allJobs, getSetting, setSetting, knownJobIds, lastCompletedFullSearch, markClosed, markChecked, jobsNeedingLivenessCheck, linkDuplicates, closeMissingFromBoard, skippedJobs, releaseSkipped, recentRuns, type JobRow } from './db.ts'
 import { writeReport } from './report.ts'
@@ -49,11 +49,22 @@ export async function checkLiveness(http: PoliteHttp, id: string): Promise<{ clo
   return { closed: false, reason: 'açık' }
 }
 
+/** LinkedIn client that remembers a 429 cooldown in the db, so a restart or a manual round does not walk straight back in. */
+export function linkedinHttp(o: HttpOptions = {}): PoliteHttp {
+  return new PoliteHttp({ ...o, onRateLimit: (until) => setSetting('linkedinCooldownUntil', new Date(until).toISOString()) })
+}
+
+/** Minutes left of a LinkedIn cooldown (0 when none). */
+export function linkedinCooldownLeft(now = Date.now()): number {
+  const until = Date.parse(getSetting('linkedinCooldownUntil') ?? '')
+  return Number.isFinite(until) && until > now ? Math.ceil((until - now) / 60_000) : 0
+}
+
 export async function collectRound(o: RunOptions = {}): Promise<number> {
   ensureDirs()
   openDb()
   const cfg = loadSearches()
-  const http = o.http ?? new PoliteHttp()
+  const http = o.http ?? linkedinHttp()
   // a full sweep whose search phase finished but which was killed later (e.g. during scoring) still counts
   if (!getSetting('lastFullRunAt')) {
     const done = lastCompletedFullSearch(cfg.searches.length)
@@ -102,6 +113,9 @@ export async function collectRound(o: RunOptions = {}): Promise<number> {
   let scoring: Promise<{ scored: number; failed: number }> | null = null
 
   try {
+    // LinkedIn throttled this IP recently: every request now would only extend it
+    const cooling = linkedinCooldownLeft()
+    if (cooling) throw new RateLimitedError(`LinkedIn soğumada (${cooling} dk daha): bu tur LinkedIn'e hiç istek atmıyorum, sadece skorlama`)
     // rotation: searches that kept coming back empty run every 2nd/3rd/4th incremental round
     const roundNo = Number(getSetting('roundNo') ?? '0') + 1
     setSetting('roundNo', String(roundNo))

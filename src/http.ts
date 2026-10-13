@@ -2,12 +2,27 @@
  * Polite HTTP client for the login-free LinkedIn guest endpoints.
  * - real browser UA, Turkish Accept-Language, nothing else (no cookies ever)
  * - 5-11 s random gap between requests, global (one queue)
- * - 429 / 999 / 5xx: exponential backoff 5 → 15 → 45 min, then give up the round
+ * - 429 / 999: counted over the last hour, not reset by one lucky request. 1st → 5 min, 2nd → 15 min,
+ *   3rd → give up LinkedIn for this round (cooldown). A throttled IP lets a request through now and then; treating
+ *   that as recovery kept a round crawling for hours and the IP flagged.
+ * - 503 / network error: consecutive backoff 5 → 15 → 45 min, then give up
  * - per-hour cap
  */
 import { log } from './log.ts'
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36'
+
+export type HttpOptions = {
+  minGapMs?: number
+  maxGapMs?: number
+  perHour?: number
+  timeoutMs?: number
+  /** 429s within an hour that end the round (default 3). */
+  maxLimitHits?: number
+  /** Told until when LinkedIn should be left alone (epoch ms), so a restart does not walk straight back in. */
+  onRateLimit?: (until: number) => void
+  sleep?: (ms: number) => Promise<void>
+}
 
 export type HttpStats = { requests: number; rateLimited: number; errors: number; lastStatus: number | null }
 
@@ -16,11 +31,13 @@ export class PoliteHttp {
   private lastAt = 0
   private hourWindow: number[] = []
   private backoffLevel = 0
+  /** Times of 429/999 answers in the last hour. */
+  private limitHits: number[] = []
   /** Multiplies the inter-request gap after each 429 in this instance (×2 per hit, capped ×4). */
   private slowFactor = 1
   private queue: Promise<unknown> = Promise.resolve()
-  private opts: { minGapMs?: number; maxGapMs?: number; perHour?: number; timeoutMs?: number }
-  constructor(opts: { minGapMs?: number; maxGapMs?: number; perHour?: number; timeoutMs?: number } = {}) {
+  private opts: HttpOptions
+  constructor(opts: HttpOptions = {}) {
     this.opts = opts
   }
 
@@ -51,11 +68,15 @@ export class PoliteHttp {
     if (this.hourWindow.length >= this.perHour) {
       const wait = 3_600_000 - (now - this.hourWindow[0]) + 1000
       if (wait >= 60_000) log.warn(`saatlik tavan (${this.perHour}) doldu, ${Math.round(wait / 60000)} dk bekleniyor`)
-      await sleep(wait)
+      await this.wait(wait)
     }
     const gap = (this.minGap + Math.floor(Math.random() * (this.maxGap - this.minGap + 1))) * this.slowFactor
     const since = Date.now() - this.lastAt
-    if (since < gap) await sleep(gap - since)
+    if (since < gap) await this.wait(gap - since)
+  }
+
+  private wait(ms: number): Promise<void> {
+    return (this.opts.sleep ?? sleep)(ms)
   }
 
   private async fetchWithBackoff(url: string): Promise<{ status: number; text: string }> {
@@ -88,14 +109,29 @@ export class PoliteHttp {
         log.warn('ağ hatası', url.slice(0, 90), e instanceof Error ? e.message : e)
       }
       this.stats.lastStatus = status
-      if (status === 429 || status === 999 || status === 503 || status === 0) {
-        this.stats.rateLimited += status === 429 || status === 999 ? 1 : 0
+      if (status === 429 || status === 999) {
+        this.stats.rateLimited++
+        const now = Date.now()
+        this.limitHits = this.limitHits.filter((t) => now - t < 3_600_000)
+        this.limitHits.push(now)
+        const n = this.limitHits.length
+        if (n >= (this.opts.maxLimitHits ?? 3)) {
+          this.opts.onRateLimit?.(now + COOLDOWN_MIN * 60_000)
+          throw new RateLimitedError(`LinkedIn son 1 saatte ${n}. kez ${status} verdi: bu IP kısılmış. LinkedIn bu tur bırakıldı, ${COOLDOWN_MIN} dk dokunmuyorum`)
+        }
+        const min = n === 1 ? 5 : 15
+        this.slowFactor = Math.min(4, this.slowFactor * 2)
+        this.opts.onRateLimit?.(now + min * 60_000)
+        log.warn(`HTTP ${status} (son 1 saatte ${n}.) → ${min} dk geri çekilme, sonra istek aralığı ×${this.slowFactor}`)
+        await this.wait(min * 60_000)
+        continue
+      }
+      if (status === 503 || status === 0) {
         const waits = [5, 15, 45]
         if (this.backoffLevel >= waits.length) throw new RateLimitedError(`LinkedIn ${status}: üç geri çekilmeden sonra da devam ediyor, tur bırakıldı`)
         const min = waits[this.backoffLevel++]
-        this.slowFactor = Math.min(4, this.slowFactor * 2)
-        log.warn(`HTTP ${status} → ${min} dk geri çekilme, sonra istek aralığı ×${this.slowFactor}`)
-        await sleep(min * 60_000)
+        log.warn(`HTTP ${status} → ${min} dk geri çekilme`)
+        await this.wait(min * 60_000)
         continue
       }
       this.backoffLevel = 0
@@ -103,6 +139,9 @@ export class PoliteHttp {
     }
   }
 }
+
+/** Minutes LinkedIn is left alone after the round gave up on 429s. */
+export const COOLDOWN_MIN = 60
 
 export class RateLimitedError extends Error {}
 

@@ -53,6 +53,47 @@ if (fs.existsSync(path.join(import.meta.dirname, '..', 'searches.yaml'))) {
   check('crashed round has finished_at + error note', !!r.finished_at && /boom/.test(r.note ?? ''), r)
 } else console.log('SKIP crashed round (searches.yaml yok)')
 
+// ---- 429s: counted over the hour (one lucky request does not reset), the 3rd ends LinkedIn for the round
+{
+  const { PoliteHttp, RateLimitedError, COOLDOWN_MIN } = await import('../src/http.ts')
+  const realFetch = globalThis.fetch
+  const statuses = [429, 200, 429, 200, 429, 200]
+  let calls = 0
+  globalThis.fetch = (async () => new Response('x', { status: statuses[calls++] ?? 200 })) as typeof fetch
+  const waits: number[] = []
+  const until: number[] = []
+  const h = new PoliteHttp({ minGapMs: 0, maxGapMs: 0, sleep: async (ms) => void waits.push(ms), onRateLimit: (u) => void until.push(u) })
+  const got: Array<number | string> = []
+  try {
+    for (let i = 0; i < 4; i++) got.push((await h.get('https://x/' + i)).status)
+  } catch (e) {
+    got.push(e instanceof RateLimitedError ? 'gave-up' : String(e))
+  }
+  const big = waits.filter((w) => w >= 60_000).map((w) => w / 60_000)
+  check('429: waits 5 then 15 min, 3rd within the hour gives up', JSON.stringify(got) === '[200,200,"gave-up"]' && JSON.stringify(big) === '[5,15]', { got, big })
+  check('429: cooldown reported for the restart guard', until.length === 3 && until[2] - Date.now() > (COOLDOWN_MIN - 1) * 60_000, until.map((u) => Math.round((u - Date.now()) / 60_000)))
+  calls = 0
+  statuses.splice(0, statuses.length, 503, 200)
+  const h2 = new PoliteHttp({ minGapMs: 0, maxGapMs: 0, sleep: async () => {} })
+  const r2 = await h2.get('https://x/503')
+  check('503: retried, not counted as rate limit', r2.status === 200 && h2.stats.rateLimited === 0)
+  globalThis.fetch = realFetch
+}
+
+// ---- a round during the cooldown sends nothing to LinkedIn
+if (fs.existsSync(path.join(import.meta.dirname, '..', 'searches.yaml'))) {
+  const { collectRound, linkedinCooldownLeft } = await import('../src/run.ts')
+  const { setSetting } = await import('../src/db.ts')
+  setSetting('linkedinCooldownUntil', new Date(Date.now() + 30 * 60_000).toISOString())
+  let sent = 0
+  const fake = { stats: { requests: 0, rateLimited: 0, errors: 0, lastStatus: null }, get: async () => (sent++, { status: 200, text: '' }) }
+  const id = await collectRound({ http: fake as never, research: false, maxSearches: 1, score: false })
+  const r = openDb(file).prepare('SELECT * FROM runs WHERE id = ?').get(id) as { finished_at: string | null; note: string | null }
+  check('cooldown: no LinkedIn request, round closed with a note', sent === 0 && !!r.finished_at && /soğumada/.test(r.note ?? '') && linkedinCooldownLeft() === 30, { sent, r })
+  setSetting('linkedinCooldownUntil', '')
+  check('cooldown: cleared value means none', linkedinCooldownLeft() === 0)
+} else console.log('SKIP cooldown round (searches.yaml yok)')
+
 // ---- reposts
 check('dupKey: repost prefix and punctuation ignored', dupKey('Acme', 'Business Analyst', 'Ankara, Türkiye') === dupKey('ACME', 'Business Analyst (Yeniden yayınlandı)', 'Ankara'))
 check('dupKey: other city is another job', dupKey('Acme', 'Business Analyst', 'Ankara') !== dupKey('Acme', 'Business Analyst', 'İstanbul'))
