@@ -86,7 +86,8 @@ export function rowToJob(r: JobRow) {
 
 type Task = { kind: string; startedAt: string; done: number; total: number; note?: string }
 /** One polite client for manual checks from the dashboard (keeps the LinkedIn pacing even outside a round). */
-const liveHttp = linkedinHttp({ minGapMs: 3000, maxGapMs: 6000 })
+let liveHttp: ReturnType<typeof linkedinHttp> | null = null
+const live = () => (liveHttp ??= linkedinHttp({ minGapMs: 3000, maxGapMs: 6000 }))
 let task: Task | null = null
 let collecting = false
 
@@ -336,7 +337,7 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, ur
     if (collecting) return json(res, 409, { error: 'Şu an tur dönüyor, LinkedIn kuyruğu dolu. Tur bitince bir daha dene.' })
     const cooling = linkedinCooldownLeft()
     if (cooling) return json(res, 409, { error: `LinkedIn bu IP'yi kıstı, ${cooling} dk daha istek atmıyorum. Sonra bir daha dene.` })
-    const out = await checkLiveness(liveHttp, checkId)
+    const out = await checkLiveness(live(), checkId)
     return json(res, 200, { ...out, job: rowToJob(getJob(checkId)!) })
   }
   const tipsId = id(/^\/api\/jobs\/([\w-]+)\/cv-tips$/)

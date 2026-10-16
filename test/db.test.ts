@@ -94,6 +94,22 @@ if (fs.existsSync(path.join(import.meta.dirname, '..', 'searches.yaml'))) {
   check('cooldown: cleared value means none', linkedinCooldownLeft() === 0)
 } else console.log('SKIP cooldown round (searches.yaml yok)')
 
+// ---- pace carried across rounds: a 429 round doubles the gap, clean rounds ease it back
+{
+  const { nextPace, PoliteHttp } = await import('../src/http.ts')
+  check('pace: 429 round doubles (floor 2)', nextPace(1, 40, 1) === 2 && nextPace(3, 40, 2) === 6 && nextPace(6, 5, 1) === 8)
+  check('pace: clean round eases 20 %, never below 1', nextPace(2, 40, 0) === 1.6 && nextPace(1.1, 40, 0) === 1)
+  check('pace: idle round keeps it', nextPace(4, 3, 0) === 4)
+  const realFetch = globalThis.fetch
+  globalThis.fetch = (async () => new Response('x', { status: 200 })) as typeof fetch
+  const gaps: number[] = []
+  const h = new PoliteHttp({ minGapMs: 1000, maxGapMs: 1000, slowFactor: 3, sleep: async (ms) => void gaps.push(ms) })
+  await h.get('https://x/a')
+  await h.get('https://x/b')
+  globalThis.fetch = realFetch
+  check('pace: starting factor stretches the gap', gaps.length > 0 && gaps.every((g) => g > 2000 && g <= 3000), gaps)
+}
+
 // ---- reposts
 check('dupKey: repost prefix and punctuation ignored', dupKey('Acme', 'Business Analyst', 'Ankara, Türkiye') === dupKey('ACME', 'Business Analyst (Yeniden yayınlandı)', 'Ankara'))
 check('dupKey: other city is another job', dupKey('Acme', 'Business Analyst', 'Ankara') !== dupKey('Acme', 'Business Analyst', 'İstanbul'))

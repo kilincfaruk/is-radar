@@ -64,48 +64,25 @@ defaults:
   detail_budget: 120    # tur başına en fazla bu kadar ilanın metni çekilir (yeniden eskiye)
 
 searches:
+  # Her satır = en az 1 istek/tur. LinkedIn misafir araması OR'u destekliyor (2026-10'da doğrulandı), o yüzden eş
+  # anlamlı başlıkları tek sorguda topla: istek sayısı ~4'te bire iner, 429 riski de onunla birlikte. Grup başına 2-4
+  # terim tut: 8-9 terimlik sorguda LinkedIn eşleşmeyi gevşetiyor ve alakasız ilan (Data Analyst vb.) karışıyor.
+  # Çok kelimeli terimleri çift tırnağa al; YAML'da bütün değeri tek tırnakla sar.
   # ---- Ankara (öncelikli şehir) ----
-  - { keywords: "business analyst", location: "Ankara, Türkiye" }
-  - { keywords: "iş analisti", location: "Ankara, Türkiye" }
-  - { keywords: "iş analizi", location: "Ankara, Türkiye" }
-  - { keywords: "product owner", location: "Ankara, Türkiye" }
-  - { keywords: "product manager", location: "Ankara, Türkiye" }
-  - { keywords: "product analyst", location: "Ankara, Türkiye" }
-  - { keywords: "ürün uzmanı", location: "Ankara, Türkiye" }
-  - { keywords: "ürün yöneticisi", location: "Ankara, Türkiye" }
+  - { keywords: '"business analyst" OR "iş analisti" OR "iş analizi"', location: "Ankara, Türkiye" }
+  - { keywords: '"product owner" OR "ürün sahibi" OR "product manager" OR "ürün yöneticisi"', location: "Ankara, Türkiye" }
+  - { keywords: '"product analyst" OR "ürün uzmanı" OR "ürün analisti"', location: "Ankara, Türkiye" }
 
   # ---- Türkiye geneli (remote ilanlar çoğunlukla burada, lokasyonu şehirsiz gelir) ----
-  - { keywords: "business analyst", location: "Türkiye" }
-  - { keywords: "iş analisti", location: "Türkiye" }
-  - { keywords: "iş analizi", location: "Türkiye" }
-  - { keywords: "product owner", location: "Türkiye" }
-  - { keywords: "ürün sahibi", location: "Türkiye" }
-  - { keywords: "product manager", location: "Türkiye" }
-  - { keywords: "ürün yöneticisi", location: "Türkiye" }
-  - { keywords: "product analyst", location: "Türkiye" }
-  - { keywords: "ürün analisti", location: "Türkiye" }
-  - { keywords: "ürün uzmanı", location: "Türkiye" }
-  - { keywords: "product specialist", location: "Türkiye" }
-  - { keywords: "sistem analisti", location: "Türkiye" }
-  - { keywords: "solution consultant", location: "Türkiye" }
+  - { keywords: '"business analyst" OR "iş analisti" OR "iş analizi"', location: "Türkiye" }
+  - { keywords: '"product owner" OR "ürün sahibi" OR "product manager" OR "ürün yöneticisi"', location: "Türkiye" }
+  - { keywords: '"product analyst" OR "ürün uzmanı" OR "ürün analisti" OR "product specialist"', location: "Türkiye" }
+  - { keywords: '"sistem analisti" OR "solution consultant" OR "implementation consultant"', location: "Türkiye" }
 
-  # ---- İzmir / Manisa / Aydın (kabul edilen şehirler) ----
-  - { keywords: "business analyst", location: "İzmir, Türkiye" }
-  - { keywords: "iş analisti", location: "İzmir, Türkiye" }
-  - { keywords: "product owner", location: "İzmir, Türkiye" }
-  - { keywords: "product manager", location: "İzmir, Türkiye" }
-  - { keywords: "product analyst", location: "İzmir, Türkiye" }
-  - { keywords: "ürün uzmanı", location: "İzmir, Türkiye" }
-  - { keywords: "business analyst", location: "Manisa, Türkiye" }
-  - { keywords: "iş analisti", location: "Manisa, Türkiye" }
-  - { keywords: "product owner", location: "Manisa, Türkiye" }
-  - { keywords: "product manager", location: "Manisa, Türkiye" }
-  - { keywords: "ürün uzmanı", location: "Manisa, Türkiye" }
-  - { keywords: "business analyst", location: "Aydın, Türkiye" }
-  - { keywords: "iş analisti", location: "Aydın, Türkiye" }
-  - { keywords: "product owner", location: "Aydın, Türkiye" }
-  - { keywords: "product manager", location: "Aydın, Türkiye" }
-  - { keywords: "ürün uzmanı", location: "Aydın, Türkiye" }
+  # ---- İzmir / Manisa / Aydın (kabul edilen şehirler; ilan az, tek geniş sorgu yeter) ----
+  - { keywords: '"business analyst" OR "iş analisti" OR "product owner" OR "product manager" OR "ürün uzmanı"', location: "İzmir, Türkiye" }
+  - { keywords: '"business analyst" OR "iş analisti" OR "product owner" OR "product manager" OR "ürün uzmanı"', location: "Manisa, Türkiye" }
+  - { keywords: '"business analyst" OR "iş analisti" OR "product owner" OR "product manager" OR "ürün uzmanı"', location: "Aydın, Türkiye" }
 
 schedule:
   every_minutes: 180

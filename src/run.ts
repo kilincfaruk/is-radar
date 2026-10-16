@@ -1,6 +1,6 @@
 /** One collection round: searches → cards → details → prescreen → (score) → (research) → (notify). */
 import { loadSearches, ensureDirs, env, type RunMode } from './config.ts'
-import { PoliteHttp, RateLimitedError, sleep, type HttpOptions } from './http.ts'
+import { PoliteHttp, RateLimitedError, sleep, nextPace, fmtPace, type HttpOptions } from './http.ts'
 import { parseSearchPage, parseDetailPage, searchUrl, detailUrl, saveSample } from './sources/linkedin-guest.ts'
 import { upsertCard, applyDetail, markDescriptionMissing, jobsNeedingDescription, startRun, updateRun, openDb, allJobs, getSetting, setSetting, knownJobIds, lastCompletedFullSearch, markClosed, markChecked, jobsNeedingLivenessCheck, linkDuplicates, closeMissingFromBoard, skippedJobs, releaseSkipped, recentRuns, type JobRow } from './db.ts'
 import { writeReport } from './report.ts'
@@ -51,7 +51,13 @@ export async function checkLiveness(http: PoliteHttp, id: string): Promise<{ clo
 
 /** LinkedIn client that remembers a 429 cooldown in the db, so a restart or a manual round does not walk straight back in. */
 export function linkedinHttp(o: HttpOptions = {}): PoliteHttp {
-  return new PoliteHttp({ ...o, onRateLimit: (until) => setSetting('linkedinCooldownUntil', new Date(until).toISOString()) })
+  return new PoliteHttp({ slowFactor: linkedinPace(), ...o, onRateLimit: (until) => setSetting('linkedinCooldownUntil', new Date(until).toISOString()) })
+}
+
+/** Gap multiplier learned over earlier rounds (1 = 5-11 s). */
+export function linkedinPace(): number {
+  const v = Number(getSetting('linkedinPace') ?? '1')
+  return Number.isFinite(v) && v >= 1 ? v : 1
 }
 
 /** Minutes left of a LinkedIn cooldown (0 when none). */
@@ -65,6 +71,11 @@ export async function collectRound(o: RunOptions = {}): Promise<number> {
   openDb()
   const cfg = loadSearches()
   const http = o.http ?? linkedinHttp()
+  const pace0 = linkedinPace()
+  if (!o.http && pace0 > 1) log.info(`LinkedIn temposu: istek aralığı ×${fmtPace(pace0)} (önceki turlardaki 429'lara göre ayarlandı)`)
+  // searches always run in full (their time window must not get holes); details and liveness get what is left
+  const requestCap = Number(env('LINKEDIN_REQUESTS_PER_RUN', '90'))
+  const capped = () => requestCap > 0 && http.stats.requests >= requestCap
   // a full sweep whose search phase finished but which was killed later (e.g. during scoring) still counts
   if (!getSetting('lastFullRunAt')) {
     const done = lastCompletedFullSearch(cfg.searches.length)
@@ -229,6 +240,10 @@ export async function collectRound(o: RunOptions = {}): Promise<number> {
       .map((x) => x.j)
     for (let i = 0; i < need.length; i++) {
       const j = need[i]
+      if (capped()) {
+        log.info(`istek bütçesi (${requestCap}) doldu: ${need.length - i} ilanın metni sonraki tura kaldı`)
+        break
+      }
       set('detay', `${i + 1}/${need.length} · ${j.title.slice(0, 50)}`)
       // breather every 25 details: bursts of hundreds of detail fetches are what draw the 429
       if (i > 0 && i % 25 === 0) await sleep(45_000 + Math.floor(Math.random() * 45_000))
@@ -259,7 +274,7 @@ export async function collectRound(o: RunOptions = {}): Promise<number> {
     const liveMin = Number(env('LIVENESS_MIN_SCORE', env('RESEARCH_MIN_SCORE', '70')))
     const stale = jobsNeedingLivenessCheck(liveBudget, liveMin)
     let closedNow = 0
-    for (let i = 0; i < stale.length; i++) {
+    for (let i = 0; i < stale.length && !capped(); i++) {
       const j = stale[i]
       set('tazelik', `${i + 1}/${stale.length} · ${j.title.slice(0, 50)}`)
       const r = await checkLiveness(http, j.linkedin_job_id)
@@ -317,6 +332,10 @@ export async function collectRound(o: RunOptions = {}): Promise<number> {
       errors: http.stats.errors,
     })
     current = null
+    if (!o.http) {
+      const pace = nextPace(pace0, http.stats.requests, http.stats.rateLimited)
+      if (pace !== pace0) setSetting('linkedinPace', String(pace))
+    }
     // standalone HTML report of the state after this round (data/reports/latest.html); never breaks the round
     if (env('REPORT_AFTER_RUN', '1') !== '0') {
       try {

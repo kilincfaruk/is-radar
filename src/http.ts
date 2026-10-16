@@ -21,6 +21,8 @@ export type HttpOptions = {
   maxLimitHits?: number
   /** Told until when LinkedIn should be left alone (epoch ms), so a restart does not walk straight back in. */
   onRateLimit?: (until: number) => void
+  /** Starting gap multiplier (carried over from earlier rounds). */
+  slowFactor?: number
   sleep?: (ms: number) => Promise<void>
 }
 
@@ -33,12 +35,13 @@ export class PoliteHttp {
   private backoffLevel = 0
   /** Times of 429/999 answers in the last hour. */
   private limitHits: number[] = []
-  /** Multiplies the inter-request gap after each 429 in this instance (×2 per hit, capped ×4). */
+  /** Multiplies the inter-request gap; starts at the carried-over pace, ×2 per 429 (capped ×8). */
   private slowFactor = 1
   private queue: Promise<unknown> = Promise.resolve()
   private opts: HttpOptions
   constructor(opts: HttpOptions = {}) {
     this.opts = opts
+    this.slowFactor = Math.max(1, opts.slowFactor ?? 1)
   }
 
   get minGap() {
@@ -120,9 +123,9 @@ export class PoliteHttp {
           throw new RateLimitedError(`LinkedIn son 1 saatte ${n}. kez ${status} verdi: bu IP kısılmış. LinkedIn bu tur bırakıldı, ${COOLDOWN_MIN} dk dokunmuyorum`)
         }
         const min = n === 1 ? 5 : 15
-        this.slowFactor = Math.min(4, this.slowFactor * 2)
+        this.slowFactor = Math.min(MAX_PACE, this.slowFactor * 2)
         this.opts.onRateLimit?.(now + min * 60_000)
-        log.warn(`HTTP ${status} (son 1 saatte ${n}.) → ${min} dk geri çekilme, sonra istek aralığı ×${this.slowFactor}`)
+        log.warn(`HTTP ${status} (son 1 saatte ${n}.) → ${min} dk geri çekilme, sonra istek aralığı ×${fmtPace(this.slowFactor)}`)
         await this.wait(min * 60_000)
         continue
       }
@@ -138,6 +141,23 @@ export class PoliteHttp {
       return { status, text }
     }
   }
+}
+
+export const MAX_PACE = 8
+
+export function fmtPace(f: number): string {
+  return String(Math.round(f * 10) / 10)
+}
+
+/**
+ * Pace for the next round from how this one went: a round with a 429 doubles the gap, a clean round with real
+ * traffic eases it by 20 %. So the gap settles just under what this IP tolerates instead of starting from
+ * 5-11 s every round and walking into the same wall.
+ */
+export function nextPace(pace: number, requests: number, rateLimited: number): number {
+  if (rateLimited > 0) return Math.min(MAX_PACE, Math.max(2, pace * 2))
+  if (requests >= 10) return Math.max(1, Math.round(pace * 0.8 * 100) / 100)
+  return pace
 }
 
 /** Minutes LinkedIn is left alone after the round gave up on 429s. */
