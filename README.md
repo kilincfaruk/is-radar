@@ -11,10 +11,12 @@ bir dashboard'da gösteren tek kişilik iş radarı. Backend yok, deploy yok: he
 
 - **Toplama:** LinkedIn'in misafir uçlarına düz `GET` (arama listesi + ilan sayfası). Cookie, Playwright, Voyager yok.
   İstekler arası 25-45 sn (`LINKEDIN_GAP_SEC`): LinkedIn ani yığını cezalandırıyor, tur bu yüzden zamana yayılır.
-  429'da 5 → 15 dk geri çekilme; bir saat içinde 3. 429'da LinkedIn o tur bırakılır ve 60 dk hiç istek atılmaz
-  (servisi yeniden başlatmak da bunu atlatmaz). 429 alan turdan sonra aralık turlar arası kalıcı olarak ikiye katlanır
-  (en fazla ×4), temiz turlarda %20 geri iner. Tur başına istek tavanı 90 (`LINKEDIN_REQUESTS_PER_RUN`, tempo
-  yavaşlayınca orantılı küçülür); aramalarda eş anlamlıları `OR` ile grupla (bkz. `searches.example.yaml`).
+  LinkedIn'in 429'u olasılıklı: 30 sn arayla bile isteklerin bir kısmına 429 dönüyor, bir sonraki deneme çoğu zaman
+  geçiyor. Bu yüzden 429'da aynı istek ~1 dk sonra tekrar denenir; üst üste gelirse 1 → 3 → 8 dk beklenir, üst üste
+  4. 429'da LinkedIn o tur bırakılır ve 30 dk hiç istek atılmaz (servisi yeniden başlatmak da bunu atlatmaz).
+  Turdaki 429 oranı %25'i geçerse sonraki turların aralığı ×1.5 açılır (en fazla ×4), %10'un altındaysa %15 geri
+  iner. Tur başına istek tavanı 90, her deneme sayılır (`LINKEDIN_REQUESTS_PER_RUN`, tempo yavaşlayınca orantılı
+  küçülür); aramalarda eş anlamlıları `OR` ile grupla (bkz. `searches.example.yaml`).
   Engellenirse IP engellenir, hesap değil.
   Aynı IP'den iki kopya (ör. bir arkadaş için ikinci klasör) çalıştırırsan kotayı paylaşırlar: turlarını çakıştırma.
 - **Ön eleme:** kural motoru (`src/shared/prescreen.ts`): başlık kapısı, çalışma şekli, şehir, rol, kıdem → `candidate / review / reject`.

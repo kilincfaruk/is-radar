@@ -2,9 +2,10 @@
  * Polite HTTP client for the login-free LinkedIn guest endpoints.
  * - real browser UA, Turkish Accept-Language, nothing else (no cookies ever)
  * - random gap between requests (default 5-11 s; LinkedIn rounds use LINKEDIN_GAP_SEC), global (one queue)
- * - 429 / 999: counted over the last hour, not reset by one lucky request. 1st → 5 min, 2nd → 15 min,
- *   3rd → give up LinkedIn for this round (cooldown). A throttled IP lets a request through now and then; treating
- *   that as recovery kept a round crawling for hours and the IP flagged.
+ * - 429 / 999: LinkedIn's guest throttle is probabilistic — measured 2026-10 at a 30 s gap: 4 of 12 requests got
+ *   429, scattered between 200s, and the very next try usually passed. So a 429 means "retry this request in about a
+ *   minute" (1 → 3 → 8 min while they come back to back), and only a streak of 4 in a row ends LinkedIn for the
+ *   round (cooldown). The caller's per-round request cap counts every attempt, so a round cannot crawl for hours.
  * - 503 / network error: consecutive backoff 5 → 15 → 45 min, then give up
  * - per-hour cap
  */
@@ -17,8 +18,8 @@ export type HttpOptions = {
   maxGapMs?: number
   perHour?: number
   timeoutMs?: number
-  /** 429s within an hour that end the round (default 3). */
-  maxLimitHits?: number
+  /** Minutes to wait after the 1st, 2nd, … 429 in a row; one more in a row ends the round. */
+  limitWaitsMin?: number[]
   /** Told until when LinkedIn should be left alone (epoch ms), so a restart does not walk straight back in. */
   onRateLimit?: (until: number) => void
   /** Starting gap multiplier (carried over from earlier rounds). */
@@ -33,9 +34,9 @@ export class PoliteHttp {
   private lastAt = 0
   private hourWindow: number[] = []
   private backoffLevel = 0
-  /** Times of 429/999 answers in the last hour. */
-  private limitHits: number[] = []
-  /** Multiplies the inter-request gap; starts at the carried-over pace, ×2 per 429 (capped ×4). */
+  /** 429/999 answers in a row (a 200 resets it). */
+  private limitStreak = 0
+  /** Multiplies the inter-request gap; starts at the carried-over pace, ×1.5 per 429 streak (capped ×4). */
   private slowFactor = 1
   private queue: Promise<unknown> = Promise.resolve()
   private opts: HttpOptions
@@ -114,19 +115,19 @@ export class PoliteHttp {
       this.stats.lastStatus = status
       if (status === 429 || status === 999) {
         this.stats.rateLimited++
-        const now = Date.now()
-        this.limitHits = this.limitHits.filter((t) => now - t < 3_600_000)
-        this.limitHits.push(now)
-        const n = this.limitHits.length
-        if (n >= (this.opts.maxLimitHits ?? 3)) {
-          this.opts.onRateLimit?.(now + COOLDOWN_MIN * 60_000)
-          throw new RateLimitedError(`LinkedIn son 1 saatte ${n}. kez ${status} verdi: bu IP kısılmış. LinkedIn bu tur bırakıldı, ${COOLDOWN_MIN} dk dokunmuyorum`)
+        this.limitStreak++
+        const waits = this.opts.limitWaitsMin ?? [1, 3, 8]
+        if (this.limitStreak > waits.length) {
+          this.opts.onRateLimit?.(Date.now() + COOLDOWN_MIN * 60_000)
+          throw new RateLimitedError(`LinkedIn üst üste ${this.limitStreak} kez ${status} verdi: bu IP şu an kısılmış. LinkedIn bu tur bırakıldı, ${COOLDOWN_MIN} dk dokunmuyorum`)
         }
-        const min = n === 1 ? 5 : 15
-        this.slowFactor = Math.min(MAX_PACE, this.slowFactor * 2)
-        this.opts.onRateLimit?.(now + min * 60_000)
-        log.warn(`HTTP ${status} (son 1 saatte ${n}.) → ${min} dk geri çekilme, sonra istek aralığı ×${fmtPace(this.slowFactor)}`)
-        await this.wait(min * 60_000)
+        // jitter so retries do not land on a fixed rhythm
+        const ms = Math.round(waits[this.limitStreak - 1] * 60_000 * (1 + Math.random() * 0.5))
+        // a scattered 429 is normal at any pace (the next round's pace learns from the rate); a streak means too fast
+        if (this.limitStreak >= 2) this.slowFactor = Math.min(MAX_PACE, this.slowFactor * 1.5)
+        this.opts.onRateLimit?.(Date.now() + ms)
+        log.warn(`HTTP ${status} (üst üste ${this.limitStreak}.) → ${Math.round(ms / 1000)} sn bekleyip aynı isteği tekrar deniyorum${this.limitStreak >= 2 ? `, aralık ×${fmtPace(this.slowFactor)}` : ''}`)
+        await this.wait(ms)
         continue
       }
       if (status === 503 || status === 0) {
@@ -138,6 +139,7 @@ export class PoliteHttp {
         continue
       }
       this.backoffLevel = 0
+      this.limitStreak = 0
       return { status, text }
     }
   }
@@ -150,18 +152,19 @@ export function fmtPace(f: number): string {
 }
 
 /**
- * Pace for the next round from how this one went: a round with a 429 doubles the gap, a clean round with real
- * traffic eases it by 20 %. So the gap settles just under what this IP tolerates instead of starting from
- * the base gap every round and walking into the same wall.
+ * Pace for the next round from this round's 429 rate: above 25 % the gap grows ×1.5, below 10 % it eases 15 %.
+ * The gap settles where this IP gets mostly 200s, instead of starting from the base every round.
  */
 export function nextPace(pace: number, requests: number, rateLimited: number): number {
-  if (rateLimited > 0) return Math.min(MAX_PACE, Math.max(2, pace * 2))
-  if (requests >= 10) return Math.max(1, Math.round(pace * 0.8 * 100) / 100)
+  if (requests < 5) return rateLimited > 0 ? Math.min(MAX_PACE, Math.max(1.5, pace * 1.5)) : pace
+  const rate = rateLimited / requests
+  if (rate > 0.25) return Math.min(MAX_PACE, Math.round(Math.max(1.5, pace * 1.5) * 100) / 100)
+  if (rate < 0.1) return Math.max(1, Math.round(pace * 0.85 * 100) / 100)
   return pace
 }
 
 /** Minutes LinkedIn is left alone after the round gave up on 429s. */
-export const COOLDOWN_MIN = 60
+export const COOLDOWN_MIN = 30
 
 export class RateLimitedError extends Error {}
 

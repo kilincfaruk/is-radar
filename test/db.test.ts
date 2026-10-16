@@ -53,7 +53,7 @@ if (fs.existsSync(path.join(import.meta.dirname, '..', 'searches.yaml'))) {
   check('crashed round has finished_at + error note', !!r.finished_at && /boom/.test(r.note ?? ''), r)
 } else console.log('SKIP crashed round (searches.yaml yok)')
 
-// ---- 429s: counted over the hour (one lucky request does not reset), the 3rd ends LinkedIn for the round
+// ---- 429s: scattered ones are retried after ~1 min; only a streak of them ends LinkedIn for the round
 {
   const { PoliteHttp, RateLimitedError, COOLDOWN_MIN } = await import('../src/http.ts')
   const realFetch = globalThis.fetch
@@ -63,15 +63,25 @@ if (fs.existsSync(path.join(import.meta.dirname, '..', 'searches.yaml'))) {
   const waits: number[] = []
   const until: number[] = []
   const h = new PoliteHttp({ minGapMs: 0, maxGapMs: 0, sleep: async (ms) => void waits.push(ms), onRateLimit: (u) => void until.push(u) })
-  const got: Array<number | string> = []
+  const got: number[] = []
+  for (let i = 0; i < 3; i++) got.push((await h.get('https://x/' + i)).status)
+  const big = waits.filter((w) => w >= 30_000)
+  check('429: scattered ones retried, every request ends in 200', JSON.stringify(got) === '[200,200,200]' && h.stats.rateLimited === 3, got)
+  check('429: each scattered one waits 1-1.5 min (streak resets on 200)', big.length === 3 && big.every((w) => w >= 60_000 && w <= 90_000), big)
+  calls = 0
+  statuses.splice(0, statuses.length, 429, 429, 429, 429, 200)
+  waits.length = 0
+  until.length = 0
+  let gaveUp = false
   try {
-    for (let i = 0; i < 4; i++) got.push((await h.get('https://x/' + i)).status)
+    await h.get('https://x/streak')
   } catch (e) {
-    got.push(e instanceof RateLimitedError ? 'gave-up' : String(e))
+    gaveUp = e instanceof RateLimitedError
   }
-  const big = waits.filter((w) => w >= 60_000).map((w) => w / 60_000)
-  check('429: waits 5 then 15 min, 3rd within the hour gives up', JSON.stringify(got) === '[200,200,"gave-up"]' && JSON.stringify(big) === '[5,15]', { got, big })
-  check('429: cooldown reported for the restart guard', until.length === 3 && until[2] - Date.now() > (COOLDOWN_MIN - 1) * 60_000, until.map((u) => Math.round((u - Date.now()) / 60_000)))
+  const streak = waits.filter((w) => w >= 30_000).map((w) => w / 60_000)
+  const within = (v: number, base: number) => v >= base && v <= base * 1.5
+  check('429: 4 in a row gives up after 1 → 3 → 8 min (+jitter)', gaveUp && streak.length === 3 && within(streak[0], 1) && within(streak[1], 3) && within(streak[2], 8) && calls === 4, { gaveUp, streak, calls })
+  check('429: cooldown reported for the restart guard', until.length === 4 && until[3] - Date.now() > (COOLDOWN_MIN - 1) * 60_000)
   calls = 0
   statuses.splice(0, statuses.length, 503, 200)
   const h2 = new PoliteHttp({ minGapMs: 0, maxGapMs: 0, sleep: async () => {} })
@@ -94,12 +104,13 @@ if (fs.existsSync(path.join(import.meta.dirname, '..', 'searches.yaml'))) {
   check('cooldown: cleared value means none', linkedinCooldownLeft() === 0)
 } else console.log('SKIP cooldown round (searches.yaml yok)')
 
-// ---- pace carried across rounds: a 429 round doubles the gap, clean rounds ease it back
+// ---- pace carried across rounds from the 429 rate
 {
   const { nextPace, PoliteHttp } = await import('../src/http.ts')
-  check('pace: 429 round doubles (floor 2, cap 4)', nextPace(1, 40, 1) === 2 && nextPace(1.5, 40, 2) === 3 && nextPace(3, 5, 1) === 4)
-  check('pace: clean round eases 20 %, never below 1', nextPace(2, 40, 0) === 1.6 && nextPace(1.1, 40, 0) === 1)
-  check('pace: idle round keeps it', nextPace(4, 3, 0) === 4)
+  check('pace: >25 % 429 grows ×1.5 (floor 1.5, cap 4)', nextPace(1, 40, 12) === 1.5 && nextPace(2, 40, 12) === 3 && nextPace(3, 40, 20) === 4)
+  check('pace: 10-25 % 429 keeps it', nextPace(2, 40, 6) === 2)
+  check('pace: <10 % 429 eases 15 %, never below 1', nextPace(2, 40, 2) === 1.7 && nextPace(1.1, 40, 0) === 1)
+  check('pace: tiny round keeps it unless it hit a 429', nextPace(4, 3, 0) === 4 && nextPace(1, 3, 1) === 1.5)
   const realFetch = globalThis.fetch
   globalThis.fetch = (async () => new Response('x', { status: 200 })) as typeof fetch
   const gaps: number[] = []
