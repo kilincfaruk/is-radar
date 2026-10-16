@@ -1,7 +1,7 @@
 /**
  * Polite HTTP client for the login-free LinkedIn guest endpoints.
  * - real browser UA, Turkish Accept-Language, nothing else (no cookies ever)
- * - 5-11 s random gap between requests, global (one queue)
+ * - random gap between requests (default 5-11 s; LinkedIn rounds use LINKEDIN_GAP_SEC), global (one queue)
  * - 429 / 999: counted over the last hour, not reset by one lucky request. 1st → 5 min, 2nd → 15 min,
  *   3rd → give up LinkedIn for this round (cooldown). A throttled IP lets a request through now and then; treating
  *   that as recovery kept a round crawling for hours and the IP flagged.
@@ -35,7 +35,7 @@ export class PoliteHttp {
   private backoffLevel = 0
   /** Times of 429/999 answers in the last hour. */
   private limitHits: number[] = []
-  /** Multiplies the inter-request gap; starts at the carried-over pace, ×2 per 429 (capped ×8). */
+  /** Multiplies the inter-request gap; starts at the carried-over pace, ×2 per 429 (capped ×4). */
   private slowFactor = 1
   private queue: Promise<unknown> = Promise.resolve()
   private opts: HttpOptions
@@ -143,7 +143,7 @@ export class PoliteHttp {
   }
 }
 
-export const MAX_PACE = 8
+export const MAX_PACE = 4
 
 export function fmtPace(f: number): string {
   return String(Math.round(f * 10) / 10)
@@ -152,7 +152,7 @@ export function fmtPace(f: number): string {
 /**
  * Pace for the next round from how this one went: a round with a 429 doubles the gap, a clean round with real
  * traffic eases it by 20 %. So the gap settles just under what this IP tolerates instead of starting from
- * 5-11 s every round and walking into the same wall.
+ * the base gap every round and walking into the same wall.
  */
 export function nextPace(pace: number, requests: number, rateLimited: number): number {
   if (rateLimited > 0) return Math.min(MAX_PACE, Math.max(2, pace * 2))

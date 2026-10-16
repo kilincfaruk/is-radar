@@ -10,10 +10,11 @@ LinkedIn iş ilanlarını **hesapsız, login'siz** toplayan, kural motoru + Clau
 bir dashboard'da gösteren tek kişilik iş radarı. Backend yok, deploy yok: her şey `localhost`, veri SQLite.
 
 - **Toplama:** LinkedIn'in misafir uçlarına düz `GET` (arama listesi + ilan sayfası). Cookie, Playwright, Voyager yok.
-  5-11 sn aralık, saatte ≤250 istek. 429'da 5 → 15 dk geri çekilme; bir saat içinde 3. 429'da LinkedIn o tur bırakılır
-  ve 60 dk hiç istek atılmaz (servisi yeniden başlatmak da bunu atlatmaz). 429 alan turdan sonra istek aralığı
-  turlar arası kalıcı olarak ikiye katlanır, temiz turlarda %20 geri iner. Tur başına istek tavanı 90
-  (`LINKEDIN_REQUESTS_PER_RUN`); aramalarda eş anlamlıları `OR` ile grupla (bkz. `searches.example.yaml`).
+  İstekler arası 25-45 sn (`LINKEDIN_GAP_SEC`): LinkedIn ani yığını cezalandırıyor, tur bu yüzden zamana yayılır.
+  429'da 5 → 15 dk geri çekilme; bir saat içinde 3. 429'da LinkedIn o tur bırakılır ve 60 dk hiç istek atılmaz
+  (servisi yeniden başlatmak da bunu atlatmaz). 429 alan turdan sonra aralık turlar arası kalıcı olarak ikiye katlanır
+  (en fazla ×4), temiz turlarda %20 geri iner. Tur başına istek tavanı 90 (`LINKEDIN_REQUESTS_PER_RUN`, tempo
+  yavaşlayınca orantılı küçülür); aramalarda eş anlamlıları `OR` ile grupla (bkz. `searches.example.yaml`).
   Engellenirse IP engellenir, hesap değil.
   Aynı IP'den iki kopya (ör. bir arkadaş için ikinci klasör) çalıştırırsan kotayı paylaşırlar: turlarını çakıştırma.
 - **Ön eleme:** kural motoru (`src/shared/prescreen.ts`): başlık kapısı, çalışma şekli, şehir, rol, kıdem → `candidate / review / reject`.

@@ -51,10 +51,22 @@ export async function checkLiveness(http: PoliteHttp, id: string): Promise<{ clo
 
 /** LinkedIn client that remembers a 429 cooldown in the db, so a restart or a manual round does not walk straight back in. */
 export function linkedinHttp(o: HttpOptions = {}): PoliteHttp {
-  return new PoliteHttp({ slowFactor: linkedinPace(), ...o, onRateLimit: (until) => setSetting('linkedinCooldownUntil', new Date(until).toISOString()) })
+  return new PoliteHttp({ ...linkedinGap(), slowFactor: linkedinPace(), ...o, onRateLimit: (until) => setSetting('linkedinCooldownUntil', new Date(until).toISOString()) })
 }
 
-/** Gap multiplier learned over earlier rounds (1 = 5-11 s). */
+/**
+ * Base gap between LinkedIn requests, LINKEDIN_GAP_SEC="min-max" (seconds). LinkedIn punishes bursts, not volume:
+ * at 6-7 s the 4th-5th request already drew a 429 (2026-10), so a round is spread out instead of fired in one go.
+ */
+export function linkedinGap(raw = env('LINKEDIN_GAP_SEC', DEFAULT_GAP)): { minGapMs: number; maxGapMs: number } {
+  const m = /^\s*(\d+(?:\.\d+)?)\s*(?:-\s*(\d+(?:\.\d+)?))?\s*$/.exec(raw) ?? /^(\d+)-(\d+)$/.exec(DEFAULT_GAP)!
+  const lo = Math.max(1, Number(m[1]))
+  const hi = Math.max(lo, Number(m[2] ?? m[1]))
+  return { minGapMs: Math.round(lo * 1000), maxGapMs: Math.round(hi * 1000) }
+}
+const DEFAULT_GAP = '25-45'
+
+/** Gap multiplier learned over earlier rounds (1 = the base gap). */
 export function linkedinPace(): number {
   const v = Number(getSetting('linkedinPace') ?? '1')
   return Number.isFinite(v) && v >= 1 ? v : 1
@@ -72,9 +84,13 @@ export async function collectRound(o: RunOptions = {}): Promise<number> {
   const cfg = loadSearches()
   const http = o.http ?? linkedinHttp()
   const pace0 = linkedinPace()
-  if (!o.http && pace0 > 1) log.info(`LinkedIn temposu: istek aralığı ×${fmtPace(pace0)} (önceki turlardaki 429'lara göre ayarlandı)`)
+  if (!o.http) {
+    const g = linkedinGap()
+    log.info(`LinkedIn temposu: istek arası ${Math.round((g.minGapMs * pace0) / 1000)}-${Math.round((g.maxGapMs * pace0) / 1000)} sn${pace0 > 1 ? ` (taban ×${fmtPace(pace0)}, önceki turlardaki 429'lara göre)` : ''}`)
+  }
   // searches always run in full (their time window must not get holes); details and liveness get what is left
-  const requestCap = Number(env('LINKEDIN_REQUESTS_PER_RUN', '90'))
+  // a slowed-down pace shrinks the budget too, so a round still fits between two scheduler ticks
+  const requestCap = Math.round(Number(env('LINKEDIN_REQUESTS_PER_RUN', '90')) / (o.http ? 1 : pace0))
   const capped = () => requestCap > 0 && http.stats.requests >= requestCap
   // a full sweep whose search phase finished but which was killed later (e.g. during scoring) still counts
   if (!getSetting('lastFullRunAt')) {

@@ -97,7 +97,7 @@ if (fs.existsSync(path.join(import.meta.dirname, '..', 'searches.yaml'))) {
 // ---- pace carried across rounds: a 429 round doubles the gap, clean rounds ease it back
 {
   const { nextPace, PoliteHttp } = await import('../src/http.ts')
-  check('pace: 429 round doubles (floor 2)', nextPace(1, 40, 1) === 2 && nextPace(3, 40, 2) === 6 && nextPace(6, 5, 1) === 8)
+  check('pace: 429 round doubles (floor 2, cap 4)', nextPace(1, 40, 1) === 2 && nextPace(1.5, 40, 2) === 3 && nextPace(3, 5, 1) === 4)
   check('pace: clean round eases 20 %, never below 1', nextPace(2, 40, 0) === 1.6 && nextPace(1.1, 40, 0) === 1)
   check('pace: idle round keeps it', nextPace(4, 3, 0) === 4)
   const realFetch = globalThis.fetch
@@ -108,6 +108,12 @@ if (fs.existsSync(path.join(import.meta.dirname, '..', 'searches.yaml'))) {
   await h.get('https://x/b')
   globalThis.fetch = realFetch
   check('pace: starting factor stretches the gap', gaps.length > 0 && gaps.every((g) => g > 2000 && g <= 3000), gaps)
+}
+
+{
+  const { linkedinGap } = await import('../src/run.ts')
+  const g = (r: string) => JSON.stringify(linkedinGap(r))
+  check('gap: "20-40" / "30" / junk', g('20-40') === '{"minGapMs":20000,"maxGapMs":40000}' && g('30') === '{"minGapMs":30000,"maxGapMs":30000}' && g('hızlı') === '{"minGapMs":25000,"maxGapMs":45000}' && g('40-20') === '{"minGapMs":40000,"maxGapMs":40000}')
 }
 
 // ---- reposts
