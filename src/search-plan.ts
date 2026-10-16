@@ -53,6 +53,36 @@ export function pruneStats(stats: SearchStats, searches: SearchSpec[]): SearchSt
   return Object.fromEntries(Object.entries(stats).filter(([k]) => keep.has(k)))
 }
 
+export type SearchGroup = { spec: SearchSpec; members: SearchSpec[] }
+
+/**
+ * LinkedIn's guest search understands `"a" OR "b"` (checked 2026-10), so plain searches that share a location (and
+ * the same yaml overrides) are sent as one query of up to `size` terms, in yaml order: synonyms written next to each
+ * other end up together. Every query is at least one request per round and LinkedIn throttles on request count, so
+ * this cuts the search phase by about `size`×. Keep `size` small: at 8-9 terms LinkedIn loosens the match and
+ * unrelated ads (Data Analyst, …) fill the pages. Searches already written with OR or quotes are left alone.
+ */
+export function groupSearches(searches: SearchSpec[], size: number): SearchGroup[] {
+  const out: SearchGroup[] = []
+  const open = new Map<string, SearchGroup>()
+  for (const s of searches) {
+    if (size < 2 || /\bOR\b|"/.test(s.keywords)) {
+      out.push({ spec: s, members: [s] })
+      continue
+    }
+    const k = `${s.location.trim().toLocaleLowerCase('tr-TR')}|${s.f_TPR ?? ''}|${s.max_pages ?? ''}`
+    let g = open.get(k)
+    if (!g || g.members.length >= size) {
+      g = { spec: s, members: [] }
+      open.set(k, g)
+      out.push(g)
+    }
+    g.members.push(s)
+  }
+  for (const g of out) if (g.members.length > 1) g.spec = { ...g.members[0], keywords: g.members.map((m) => `"${m.keywords.trim()}"`).join(' OR ') }
+  return out
+}
+
 function hash(s: string): number {
   let h = 0
   for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0

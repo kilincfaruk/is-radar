@@ -36,13 +36,17 @@ export class PoliteHttp {
   private backoffLevel = 0
   /** 429/999 answers in a row (a 200 resets it). */
   private limitStreak = 0
-  /** Multiplies the inter-request gap; starts at the carried-over pace, ×1.5 per 429 streak (capped ×4). */
+  /** Successful answers in a row since the last slow-down; enough of them ease the gap back. */
+  private okStreak = 0
+  private basePace = 1
+  /** Multiplies the inter-request gap; starts at the carried-over pace, ×1.5 per 429 streak (capped ×4), back /1.5 after 8 clean answers. */
   private slowFactor = 1
   private queue: Promise<unknown> = Promise.resolve()
   private opts: HttpOptions
   constructor(opts: HttpOptions = {}) {
     this.opts = opts
     this.slowFactor = Math.max(1, opts.slowFactor ?? 1)
+    this.basePace = this.slowFactor
   }
 
   get minGap() {
@@ -116,6 +120,7 @@ export class PoliteHttp {
       if (status === 429 || status === 999) {
         this.stats.rateLimited++
         this.limitStreak++
+        this.okStreak = 0
         const waits = this.opts.limitWaitsMin ?? [1, 3, 8]
         if (this.limitStreak > waits.length) {
           this.opts.onRateLimit?.(Date.now() + COOLDOWN_MIN * 60_000)
@@ -140,6 +145,12 @@ export class PoliteHttp {
       }
       this.backoffLevel = 0
       this.limitStreak = 0
+      // a slow-down after a 429 streak is not forever: 8 clean answers in a row take a step back toward the base
+      if (++this.okStreak >= 8 && this.slowFactor > this.basePace) {
+        this.slowFactor = Math.max(this.basePace, this.slowFactor / 1.5)
+        this.okStreak = 0
+        log.info(`LinkedIn 8 istektir sorunsuz, aralık ×${fmtPace(this.slowFactor)}'e indi`)
+      }
       return { status, text }
     }
   }

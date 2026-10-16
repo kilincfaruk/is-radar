@@ -1,4 +1,4 @@
-import { planRound, recordYield, runEvery, searchKey, pruneStats, emptyYield, type SearchStats } from '../src/search-plan.ts'
+import { planRound, recordYield, runEvery, searchKey, pruneStats, emptyYield, groupSearches, type SearchStats } from '../src/search-plan.ts'
 import { buildScoringSystem, buildScoringUserBatch, SCORE_BATCH_JSON_SCHEMA } from '../src/shared/prompt.ts'
 import { tipsToMarkdown } from '../src/pipeline/cv.ts'
 import { detectClosed, parseDetailPage } from '../src/sources/linkedin-guest.ts'
@@ -42,6 +42,28 @@ check('3× empty search runs 4 of 12 rounds, 2× empty runs 6 of 12', manisaRuns
 check('skipped entries carry the cadence', rounds.some((r) => r.skipped.some((x) => x.every === 3)))
 check('pruneStats drops removed searches', Object.keys(pruneStats(st, S.slice(0, 2))).length === 1)
 check('emptyYield shape', JSON.stringify(emptyYield()) === JSON.stringify({ runs: 0, zeroStreak: 0, lastNew: 0, lastRunAt: null, totalNew: 0 }))
+
+// ---- OR grouping: same location in yaml order, up to `size` terms; hand-written OR / quotes and overrides stay apart
+{
+  const A = 'Ankara, Türkiye'
+  const G = [
+    { keywords: 'business analyst', location: A },
+    { keywords: 'iş analisti', location: A },
+    { keywords: 'Türkiye geneli', location: 'Türkiye' },
+    { keywords: 'iş analizi', location: A },
+    { keywords: 'product owner', location: A },
+    { keywords: '"x" OR "y"', location: A },
+    { keywords: 'product manager', location: A, max_pages: 8 },
+  ]
+  const g = groupSearches(G, 3)
+  check('group: first three Ankara terms become one OR query', g[0].spec.keywords === '"business analyst" OR "iş analisti" OR "iş analizi"' && g[0].members.length === 3 && g[0].spec.location === A, g[0])
+  check('group: other location is its own query, plain keywords kept', g[1].spec.keywords === 'Türkiye geneli' && g[1].members.length === 1)
+  check('group: 4th Ankara term opens a new group', g[2].spec.keywords === 'product owner' && g[2].members.length === 1)
+  check('group: hand-written OR untouched', g[3].spec.keywords === '"x" OR "y"')
+  check('group: different max_pages is not merged', g[4].spec.keywords === 'product manager' && g[4].spec.max_pages === 8)
+  check('group: every search is in exactly one group', g.reduce((n, x) => n + x.members.length, 0) === G.length)
+  check('group: size 1 turns grouping off', groupSearches(G, 1).length === G.length && groupSearches(G, 0).every((x) => x.members.length === 1))
+}
 
 // ---- prompt: about block + batch
 const sysNoAbout = buildScoringSystem('CV', 'KRIT')

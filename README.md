@@ -16,7 +16,7 @@ bir dashboard'da gösteren tek kişilik iş radarı. Backend yok, deploy yok: he
   4. 429'da LinkedIn o tur bırakılır ve 30 dk hiç istek atılmaz (servisi yeniden başlatmak da bunu atlatmaz).
   Turdaki 429 oranı %25'i geçerse sonraki turların aralığı ×1.5 açılır (en fazla ×4), %10'un altındaysa %15 geri
   iner. Tur başına istek tavanı 90, her deneme sayılır (`LINKEDIN_REQUESTS_PER_RUN`, tempo yavaşlayınca orantılı
-  küçülür); aramalarda eş anlamlıları `OR` ile grupla (bkz. `searches.example.yaml`).
+  küçülür). Aynı lokasyondaki aramalar otomatik olarak 3'erli `OR` sorgusunda birleşir (`SEARCH_GROUP_SIZE`).
   Engellenirse IP engellenir, hesap değil.
   Aynı IP'den iki kopya (ör. bir arkadaş için ikinci klasör) çalıştırırsan kotayı paylaşırlar: turlarını çakıştırma.
 - **Ön eleme:** kural motoru (`src/shared/prescreen.ts`): başlık kapısı, çalışma şekli, şehir, rol, kıdem → `candidate / review / reject`.

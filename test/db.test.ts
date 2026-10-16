@@ -117,8 +117,20 @@ if (fs.existsSync(path.join(import.meta.dirname, '..', 'searches.yaml'))) {
   const h = new PoliteHttp({ minGapMs: 1000, maxGapMs: 1000, slowFactor: 3, sleep: async (ms) => void gaps.push(ms) })
   await h.get('https://x/a')
   await h.get('https://x/b')
-  globalThis.fetch = realFetch
   check('pace: starting factor stretches the gap', gaps.length > 0 && gaps.every((g) => g > 2000 && g <= 3000), gaps)
+  // a 429 streak slows the round down; 8 clean answers step it back toward the starting pace, never below it
+  const seq = [429, 429, ...Array(16).fill(200)]
+  let n = 0
+  globalThis.fetch = (async () => new Response('x', { status: seq[n++] ?? 200 })) as typeof fetch
+  const h2 = new PoliteHttp({ minGapMs: 0, maxGapMs: 0, slowFactor: 1.5, sleep: async () => {} })
+  const f = () => (h2 as unknown as { slowFactor: number }).slowFactor
+  await h2.get('https://x/0')
+  const slowed = f()
+  for (let i = 0; i < 7; i++) await h2.get('https://x/' + i)
+  const after8 = f()
+  for (let i = 0; i < 16; i++) await h2.get('https://x/b' + i)
+  globalThis.fetch = realFetch
+  check('pace: streak slows, clean run eases back to the starting pace', slowed === 2.25 && after8 === 1.5 && f() === 1.5, { slowed, after8, end: f() })
 }
 
 {

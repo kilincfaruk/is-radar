@@ -7,7 +7,7 @@ import { writeReport } from './report.ts'
 import { fetchBoard, atsId, atsSource } from './sources/ats.ts'
 import { runPrescreen, runScoringWhile, runTopScoring } from './pipeline/score.ts'
 import { titleGate, detectRole } from './shared/prescreen.ts'
-import { planRound, pruneStats, recordYield, type SearchStats } from './search-plan.ts'
+import { planRound, pruneStats, recordYield, groupSearches, type SearchStats } from './search-plan.ts'
 import { setPrescreen, markDescriptionSkipped } from './db.ts'
 import { runResearch } from './pipeline/research.ts'
 import { notifyTelegram } from './pipeline/notify.ts'
@@ -150,8 +150,10 @@ export async function collectRound(o: RunOptions = {}): Promise<number> {
     const all = cfg.searches.slice(0, o.maxSearches ?? cfg.searches.length)
     const plan = planRound(all, yieldStats, roundNo, mode)
     if (plan.skipped.length) log.info(`rotasyon: ${plan.skipped.length} düşük verimli arama bu tur atlandı (${plan.skipped.map((x) => `${x.spec.keywords} · ${x.spec.location} → ${x.every} turda bir`).join('; ')})`)
-    const searches = plan.run
-    for (const sp of searches) {
+    // synonyms in the same location go out as one OR query; the yield is credited to every member for rotation
+    const groups = groupSearches(plan.run, Number(env('SEARCH_GROUP_SIZE', '3')))
+    if (groups.length < plan.run.length) log.info(`arama grupları: ${plan.run.length} arama → ${groups.length} LinkedIn sorgusu (OR ile, SEARCH_GROUP_SIZE)`)
+    for (const { spec: sp, members } of groups) {
       const newBefore = newJobs
       // guest search has no workplace filter and no workplace label: every card starts as 'unknown',
       // the ad text (rules + LLM) decides remote/hybrid/onsite later
@@ -186,8 +188,8 @@ export async function collectRound(o: RunOptions = {}): Promise<number> {
         // incremental: a page made only of ids we already had means the rest is old too
         if (mode === 'incremental' && unknownOnPage === 0) break
       }
-      searchesDone++
-      yieldStats = recordYield(yieldStats, sp, newJobs - newBefore)
+      searchesDone += members.length
+      for (const m of members) yieldStats = recordYield(yieldStats, m, newJobs - newBefore)
       setSetting('searchStats', JSON.stringify(yieldStats))
       updateRun(runId, { searches: searchesDone, cards, new_jobs: newJobs, requests: http.stats.requests, rate_limited: http.stats.rateLimited, errors: http.stats.errors })
     }
