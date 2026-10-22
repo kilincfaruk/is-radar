@@ -88,10 +88,12 @@ export async function collectRound(o: RunOptions = {}): Promise<number> {
     const g = linkedinGap()
     log.info(`LinkedIn temposu: istek arası ${Math.round((g.minGapMs * pace0) / 1000)}-${Math.round((g.maxGapMs * pace0) / 1000)} sn${pace0 > 1 ? ` (taban ×${fmtPace(pace0)}, önceki turlardaki 429'lara göre)` : ''}`)
   }
-  // searches always run in full (their time window must not get holes); details and liveness get what is left
-  // a slowed-down pace shrinks the budget too, so a round still fits between two scheduler ticks
-  const requestCap = Math.round(Number(env('LINKEDIN_REQUESTS_PER_RUN', '90')) / (o.http ? 1 : pace0))
-  const capped = () => requestCap > 0 && http.stats.requests >= requestCap
+  // searches always run in full (their time window must not get holes); ad texts and liveness checks have their OWN
+  // budget counted from the start of the detail phase — a shared one let a long search phase starve the texts, and an
+  // ad without text is never scored. A slowed-down pace shrinks it, so a round still fits between two scheduler ticks.
+  const detailCap = Math.round(Number(env('LINKEDIN_DETAIL_REQUESTS_PER_RUN', '60')) / (o.http ? 1 : pace0))
+  let detailStart = 0
+  const capped = () => detailCap > 0 && http.stats.requests - detailStart >= detailCap
   // a full sweep whose search phase finished but which was killed later (e.g. during scoring) still counts
   if (!getSetting('lastFullRunAt')) {
     const done = lastCompletedFullSearch(cfg.searches.length)
@@ -256,10 +258,11 @@ export async function collectRound(o: RunOptions = {}): Promise<number> {
       .sort((a, b) => a.t - b.t || (b.j.posted_at ?? b.j.first_seen_at).localeCompare(a.j.posted_at ?? a.j.first_seen_at))
       .slice(0, budget)
       .map((x) => x.j)
+    detailStart = http.stats.requests
     for (let i = 0; i < need.length; i++) {
       const j = need[i]
       if (capped()) {
-        log.info(`istek bütçesi (${requestCap}) doldu: ${need.length - i} ilanın metni sonraki tura kaldı`)
+        log.info(`metin bütçesi (${detailCap} istek) doldu: ${need.length - i} ilanın metni sonraki tura kaldı (en umut verici başlıklar önce çekildi)`)
         break
       }
       set('detay', `${i + 1}/${need.length} · ${j.title.slice(0, 50)}`)

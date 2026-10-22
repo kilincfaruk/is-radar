@@ -139,6 +139,21 @@ if (fs.existsSync(path.join(import.meta.dirname, '..', 'searches.yaml'))) {
   check('gap: "20-40" / "30" / junk', g('20-40') === '{"minGapMs":20000,"maxGapMs":40000}' && g('30') === '{"minGapMs":30000,"maxGapMs":30000}' && g('hızlı') === '{"minGapMs":25000,"maxGapMs":45000}' && g('40-20') === '{"minGapMs":40000,"maxGapMs":40000}')
 }
 
+// ---- ad texts have their own budget: a long search phase must not starve them (no text → never scored)
+if (fs.existsSync(path.join(import.meta.dirname, '..', 'searches.yaml'))) {
+  const { collectRound } = await import('../src/run.ts')
+  const { setSetting } = await import('../src/db.ts')
+  setSetting('linkedinCooldownUntil', '')
+  for (let i = 0; i < 4; i++) upsertCard({ ...card, linkedin_job_id: `40000000${50 + i}`, title: 'Business Analyst', company: `Detay ${i}` })
+  process.env.LINKEDIN_DETAIL_REQUESTS_PER_RUN = '2'
+  const stats = { requests: 500, rateLimited: 0, errors: 0, lastStatus: null as number | null }
+  let detailCalls = 0
+  const fake = { stats, get: async (u: string) => (stats.requests++, u.includes('/jobPosting/') && detailCalls++, { status: 200, text: '' }) }
+  await collectRound({ http: fake as never, research: false, maxSearches: 1, score: false })
+  delete process.env.LINKEDIN_DETAIL_REQUESTS_PER_RUN
+  check('detail budget: counted from the detail phase, not the round start', detailCalls === 2, { detailCalls })
+} else console.log('SKIP detail budget (searches.yaml yok)')
+
 // ---- reposts
 check('dupKey: repost prefix and punctuation ignored', dupKey('Acme', 'Business Analyst', 'Ankara, Türkiye') === dupKey('ACME', 'Business Analyst (Yeniden yayınlandı)', 'Ankara'))
 check('dupKey: other city is another job', dupKey('Acme', 'Business Analyst', 'Ankara') !== dupKey('Acme', 'Business Analyst', 'İstanbul'))

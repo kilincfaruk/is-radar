@@ -15,8 +15,8 @@ bir dashboard'da gösteren tek kişilik iş radarı. Backend yok, deploy yok: he
   geçiyor. Bu yüzden 429'da aynı istek ~1 dk sonra tekrar denenir; üst üste gelirse 1 → 3 → 8 dk beklenir, üst üste
   4. 429'da LinkedIn o tur bırakılır ve 30 dk hiç istek atılmaz (servisi yeniden başlatmak da bunu atlatmaz).
   Turdaki 429 oranı %25'i geçerse sonraki turların aralığı ×1.5 açılır (en fazla ×4), %10'un altındaysa %15 geri
-  iner. Tur başına istek tavanı 90, her deneme sayılır (`LINKEDIN_REQUESTS_PER_RUN`, tempo yavaşlayınca orantılı
-  küçülür). Aynı lokasyondaki aramalar otomatik olarak 3'erli `OR` sorgusunda birleşir (`SEARCH_GROUP_SIZE`).
+  iner. Aramalar her zaman tam koşar; ilan metinleri ve tazelik kontrolü için ayrı bir tur bütçesi var: 60 istek, her
+  deneme sayılır (`LINKEDIN_DETAIL_REQUESTS_PER_RUN`, tempo yavaşlayınca orantılı küçülür). Aynı lokasyondaki aramalar otomatik olarak 3'erli `OR` sorgusunda birleşir (`SEARCH_GROUP_SIZE`).
   Engellenirse IP engellenir, hesap değil.
   Aynı IP'den iki kopya (ör. bir arkadaş için ikinci klasör) çalıştırırsan kotayı paylaşırlar: turlarını çakıştırma.
 - **Ön eleme:** kural motoru (`src/shared/prescreen.ts`): başlık kapısı, çalışma şekli, şehir, rol, kıdem → `candidate / review / reject`.
