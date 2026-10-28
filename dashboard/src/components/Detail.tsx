@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type RefObject } from 'react'
+import { useRef, useState, type RefObject } from 'react'
 import type { Job, JobStatus } from '@/lib/types'
 import type { PreScreen } from '@/lib/prescreen'
 import { agreement, bucket, DECISION_REASONS, eyebrow, facts, modelLine, ROLE_TR, scoreOf, SENIORITY_TR, suspectWhy, wordCount, workplaceView } from '@/lib/model'
@@ -74,9 +74,15 @@ export function Detail(p: Props) {
   // notes: local draft, saved on blur / after typing pause
   const [notes, setNotes] = useState(j.notes ?? '')
   const saveT = useRef<number | null>(null)
-  useEffect(() => {
+  // another ad (or its saved notes changed): reset the draft during render, not in an effect. An effect costs a second
+  // synchronous commit per J/K press; with a background update pending, React counts those as nested updates and
+  // throws "maximum update depth" (#185) after ~25 fast presses.
+  const notesKey = `${j.linkedinJobId}|${j.notes ?? ''}`
+  const [notesFor, setNotesFor] = useState(notesKey)
+  if (notesFor !== notesKey) {
+    setNotesFor(notesKey)
     setNotes(j.notes ?? '')
-  }, [j.linkedinJobId, j.notes])
+  }
   const scheduleSave = (v: string) => {
     setNotes(v)
     if (saveT.current) window.clearTimeout(saveT.current)

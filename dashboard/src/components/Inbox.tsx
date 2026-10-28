@@ -1,4 +1,4 @@
-import { useMemo, type RefObject } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import type { Job } from '@/lib/types'
 import type { ServerStats } from '@/lib/platform'
 import { bucket, STATUS_LABEL, type JobView, type ScoreFunnel } from '@/lib/model'
@@ -92,6 +92,51 @@ function sinceLine(stats: ServerStats | null): string {
   return `Son tur ${fmtWhen(r.finished_at ?? r.started_at).toLowerCase()} · ${r.new_jobs} yeni · ${r.scored} skor${r.rate_limited ? ` · ${r.rate_limited}×429` : ''}`
 }
 
+const PAGE = 150
+
+type RowProps = { j: Job; v: JobView; on: boolean; threshold: number; dimDone: boolean; isNew: boolean; you: number | null; onSelect: (id: string) => void }
+
+/** One list row. Memoised: a poll or a selection change re-renders only the rows whose data actually changed. */
+const Row = memo(function Row({ j, v, on, threshold, dimDone, isNew, you, onSelect }: RowProps) {
+  const s = v.score
+  const wp = v.wp
+  const st = STATUS_LABEL[j.status]
+  return (
+    <HoverCard openDelay={550} closeDelay={60}>
+      <HoverCardTrigger asChild>
+        <div className={cx('row', on && 'on', j.status !== 'new' && dimDone && 'done', !j.viewedAt && j.status === 'new' && 'unread')} onClick={() => onSelect(j.linkedinJobId)} data-id={j.linkedinJobId}>
+          <div className="score" style={{ color: bucket(s, threshold).color }}>
+            {s == null ? '—' : s}
+            {you != null && s != null && <div title="Kararlarına göre ilgilenme ihtimalin" style={{ fontSize: 10.5, fontWeight: 500, color: 'var(--blue)', marginTop: 1 }}>%{Math.round(you * 100)}</div>}
+          </div>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center', minWidth: 0 }}>
+              {!j.viewedAt && j.status === 'new' && <span className="dot" title="Henüz açmadın" />}
+              <span className="t" style={{ color: j.status !== 'new' ? 'var(--muted)' : j.viewedAt ? 'var(--muted)' : 'var(--text)' }}>{j.title}</span>
+              {isNew && <span className="pill-new">yeni</span>}
+              {v.flagged && <span style={{ color: 'var(--red)', fontSize: 12, flexShrink: 0 }}>⚑</span>}
+            </div>
+            <div className="s">
+              {j.company ?? '–'} <span className="dim">·</span> <span style={{ color: wp.color }}>{wp.label}</span>
+            </div>
+            <div className="m">
+              <span>{rel(j.postedAt ?? j.firstSeenAt)}</span>
+              <span style={{ color: v.pre.verdict === 'reject' ? 'var(--red)' : v.pre.verdict === 'candidate' ? 'var(--accent)' : undefined }}>kural {v.pre.verdict}</span>
+              {j.status !== 'new' && <span style={{ color: st[1] }}>{st[0]}</span>}
+              {j.source?.startsWith('ats:') && <span style={{ color: 'var(--blue)' }} title={j.searchKeywords ?? 'şirket panosu'}>şirket panosu</span>}
+              {j.closedAt && <span style={{ color: 'var(--red)', fontWeight: 600 }}>kapandı</span>}
+              {j.scoreError && <span style={{ color: 'var(--red)' }}>skor hatası</span>}
+            </div>
+          </div>
+        </div>
+      </HoverCardTrigger>
+      <HoverCardContent side="right" align="start" sideOffset={10} className="w-96">
+        <RowPreview j={j} v={v} you={you} />
+      </HoverCardContent>
+    </HoverCard>
+  )
+})
+
 export function Inbox(p: Props) {
   const ctx: Ctx = useMemo(() => ({ view: p.view, threshold: p.threshold }), [p.view, p.threshold])
   const fc = filterCount(p.filters)
@@ -99,6 +144,36 @@ export function Inbox(p: Props) {
   const line = fc ? `${p.rows.length} ilan · ${hidden} gizli` : `${p.rows.length} ilan`
   const fx = useMemo(() => facets(p.raw, p.filters, ctx), [p.raw, p.filters, ctx])
   const sum = summary(p.filters, p.threshold)
+
+  // windowed list: thousands of rows (each with a hover card) froze the browser for seconds on every queue/tab switch
+  // and every 4 s poll. Render a page, grow on scroll; the selected row is always inside the rendered part (J/K).
+  const [limit, setLimit] = useState(PAGE)
+  const listRef = useRef<HTMLDivElement>(null)
+  // new queue / filter: back to the first page and the top (a list left scrolled down would load the next page at once)
+  useEffect(() => {
+    setLimit(PAGE)
+    listRef.current?.scrollTo({ top: 0 })
+  }, [p.queue, p.filters])
+  const selIdx = useMemo(() => (p.selectedId ? p.rows.findIndex((j) => j.linkedinJobId === p.selectedId) : -1), [p.rows, p.selectedId])
+  const shown = useMemo(() => p.rows.slice(0, Math.max(limit, selIdx + 30)), [p.rows, limit, selIdx])
+  const sentinelRef = useRef<HTMLDivElement>(null)
+  const more = shown.length < p.rows.length
+  useEffect(() => {
+    const el = sentinelRef.current
+    if (!el || !more) return
+    const io = new IntersectionObserver((es) => es.some((e) => e.isIntersecting) && setLimit((l) => l + PAGE), { root: listRef.current, rootMargin: '400px' })
+    io.observe(el)
+    return () => io.disconnect()
+  }, [more, shown.length])
+  // keep the selected row in view (it may only exist after this render, so scroll here rather than in the key handler)
+  useEffect(() => {
+    if (!p.selectedId) return
+    listRef.current?.querySelector(`[data-id="${CSS.escape(p.selectedId)}"]`)?.scrollIntoView({ block: 'nearest' })
+  }, [p.selectedId])
+  // stable click handler, so memoised rows do not re-render when the parent passes a new function
+  const selRef = useRef(p.onSelect)
+  selRef.current = p.onSelect
+  const onSelect = useCallback((id: string) => selRef.current(id), [])
 
   return (
     <aside className="aside">
@@ -184,51 +259,27 @@ export function Inbox(p: Props) {
         )}
       </div>
 
-      <div style={{ flex: 1, overflow: 'auto', padding: 6 }}>
-        {p.rows.map((j) => {
-          const v = p.view(j)
-          const s = v.score
-          const wp = v.wp
-          const on = j.linkedinJobId === p.selectedId
-          const st = STATUS_LABEL[j.status]
-          return (
-            <HoverCard key={j.linkedinJobId} openDelay={550} closeDelay={60}>
-            <HoverCardTrigger asChild>
-            <div className={cx('row', on && 'on', j.status !== 'new' && p.queue !== 'decided' && 'done', !j.viewedAt && j.status === 'new' && 'unread')} onClick={() => p.onSelect(j.linkedinJobId)} data-id={j.linkedinJobId}>
-              <div className="score" style={{ color: bucket(s, p.threshold).color }}>
-                {s == null ? '—' : s}
-                {p.youOf && s != null && (() => {
-                  const y = p.youOf(j)
-                  return y == null ? null : <div title="Kararlarına göre ilgilenme ihtimalin" style={{ fontSize: 10.5, fontWeight: 500, color: 'var(--blue)', marginTop: 1 }}>%{Math.round(y * 100)}</div>
-                })()}
-              </div>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ display: 'flex', gap: 6, alignItems: 'center', minWidth: 0 }}>
-                  {!j.viewedAt && j.status === 'new' && <span className="dot" title="Henüz açmadın" />}
-                  <span className="t" style={{ color: j.status !== 'new' ? 'var(--muted)' : j.viewedAt ? 'var(--muted)' : 'var(--text)' }}>{j.title}</span>
-                  {p.lastRoundAt && j.firstSeenAt >= p.lastRoundAt && j.status === 'new' && <span className="pill-new">yeni</span>}
-                  {v.flagged && <span style={{ color: 'var(--red)', fontSize: 12, flexShrink: 0 }}>⚑</span>}
-                </div>
-                <div className="s">
-                  {j.company ?? '–'} <span className="dim">·</span> <span style={{ color: wp.color }}>{wp.label}</span>
-                </div>
-                <div className="m">
-                  <span>{rel(j.postedAt ?? j.firstSeenAt)}</span>
-                  <span style={{ color: v.pre.verdict === 'reject' ? 'var(--red)' : v.pre.verdict === 'candidate' ? 'var(--accent)' : undefined }}>kural {v.pre.verdict}</span>
-                  {j.status !== 'new' && <span style={{ color: st[1] }}>{st[0]}</span>}
-                  {j.source?.startsWith('ats:') && <span style={{ color: 'var(--blue)' }} title={j.searchKeywords ?? 'şirket panosu'}>şirket panosu</span>}
-                  {j.closedAt && <span style={{ color: 'var(--red)', fontWeight: 600 }}>kapandı</span>}
-                  {j.scoreError && <span style={{ color: 'var(--red)' }}>skor hatası</span>}
-                </div>
-              </div>
-            </div>
-            </HoverCardTrigger>
-            <HoverCardContent side="right" align="start" sideOffset={10} className="w-96">
-              <RowPreview j={j} v={v} you={p.youOf ? p.youOf(j) : null} />
-            </HoverCardContent>
-            </HoverCard>
-          )
-        })}
+      <div ref={listRef} style={{ flex: 1, overflow: 'auto', padding: 6 }}>
+        {shown.map((j) => (
+          <Row
+            key={j.linkedinJobId}
+            j={j}
+            v={p.view(j)}
+            on={j.linkedinJobId === p.selectedId}
+            threshold={p.threshold}
+            dimDone={p.queue !== 'decided'}
+            isNew={!!p.lastRoundAt && j.firstSeenAt >= p.lastRoundAt && j.status === 'new'}
+            you={p.youOf ? p.youOf(j) : null}
+            onSelect={onSelect}
+          />
+        ))}
+        {shown.length < p.rows.length && (
+          <div ref={sentinelRef} style={{ padding: '12px 16px', textAlign: 'center' }}>
+            <button className="link" onClick={() => setLimit((l) => l + PAGE)}>
+              {p.rows.length - shown.length} ilan daha · göster
+            </button>
+          </div>
+        )}
         {p.rows.length === 0 && (
           <div style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--muted)' }}>
             <div style={{ fontWeight: 600, color: 'var(--text)', marginBottom: 6 }}>

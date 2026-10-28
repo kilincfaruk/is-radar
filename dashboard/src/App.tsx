@@ -69,6 +69,7 @@ export default function App() {
   const [busy, setBusy] = useState<Record<string, { rescore?: boolean; research?: boolean; cvTips?: boolean; check?: boolean }>>({})
   const toastT = useRef<number | null>(null)
   const lastKey = useRef<string | null>(null)
+  const statsJson = useRef('')
   const noteRef = useRef<HTMLTextAreaElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
 
@@ -114,7 +115,12 @@ export default function App() {
   const pollStats = useCallback(async () => {
     try {
       const s = await server.stats()
-      setStats(s)
+      // same answer as last time → keep the old object: no re-render of the whole app every 4 s
+      const sj = JSON.stringify(s)
+      if (sj !== statsJson.current) {
+        statsJson.current = sj
+        setStats(s)
+      }
       const key = `${s.lastRun?.id ?? 0}:${s.lastRun?.finished_at ?? ''}:${s.task?.kind ?? ''}:${s.task?.done ?? ''}:${s.collecting}`
       if (lastKey.current !== null && key !== lastKey.current) void reload()
       lastKey.current = key
@@ -523,8 +529,7 @@ export default function App() {
       if (!rows.length) return
       const i = current ? rows.findIndex((x) => x.linkedinJobId === current.linkedinJobId) : -1
       const n = Math.max(0, Math.min(rows.length - 1, (i === -1 ? 0 : i) + d))
-      setSelectedId(rows[n].linkedinJobId)
-      document.querySelector(`[data-id="${rows[n].linkedinJobId}"]`)?.scrollIntoView({ block: 'nearest' })
+      setSelectedId(rows[n].linkedinJobId) // Inbox scrolls it into view once rendered
     },
     [rows, current],
   )
