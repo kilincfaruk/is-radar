@@ -2,7 +2,7 @@
 import http from 'node:http'
 import fs from 'node:fs'
 import path from 'node:path'
-import { PUBLIC_DIR, SEARCHES_FILE, env, loadSearches } from '../config.ts'
+import { PUBLIC_DIR, ROOT, SEARCHES_FILE, env, loadSearches } from '../config.ts'
 import YAML from 'yaml'
 import type { RadarConfig } from '../shared/prescreen.ts'
 import { allJobs, getJob, updateUserFields, deleteJob, stats, recentRuns, openDb, resetScore, setScore, setSetting, getSetting, type JobRow, nowIso, clearScoreErrors, jobsNeedingScore, closeStaleRuns, jobsChangedSince, staleScoredJobs, linkDuplicates } from '../db.ts'
@@ -413,6 +413,26 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, ur
   json(res, 404, { error: 'Böyle bir API yolu yok.' })
 }
 
+/** Newest file modification time (ms) under the given folders. */
+function newestMtime(dirs: string[]): number {
+  let max = 0
+  const walk = (d: string) => {
+    let entries: fs.Dirent[] = []
+    try {
+      entries = fs.readdirSync(d, { withFileTypes: true })
+    } catch {
+      return
+    }
+    for (const e of entries) {
+      const f = path.join(d, e.name)
+      if (e.isDirectory()) walk(f)
+      else max = Math.max(max, fs.statSync(f).mtimeMs)
+    }
+  }
+  dirs.forEach(walk)
+  return max
+}
+
 /** What the scheduler will do next, for the dashboard: interval, active hours, next tick (null while running / outside hours). */
 function scheduleInfo(lastFinished: string | null): { everyMinutes: number; activeHours: [number, number]; nextRunAt: string | null } {
   let cfg
@@ -457,6 +477,9 @@ export async function serve(): Promise<void> {
     const idx = path.join(PUBLIC_DIR, 'index.html')
     const built = fs.existsSync(idx) ? fs.statSync(idx).mtime.toISOString().slice(0, 16).replace('T', ' ') : 'YOK (`npm run build` çalıştır)'
     log.info(`dashboard: http://localhost:${port} · build: ${built}`)
+    // after a `git pull` the dashboard sources are newer than the built bundle: say so, or the old UI keeps running
+    const stale = fs.existsSync(idx) && newestMtime([path.join(ROOT, 'dashboard', 'src'), path.join(ROOT, 'src', 'shared')]) > fs.statSync(idx).mtimeMs
+    if (stale) log.warn('dashboard kaynakları build\'den yeni (git pull sonrası?): eski arayüz çalışıyor. Serve\'ü durdurmadan başka bir pencerede `npm run build` çalıştır, sonra sayfayı yenile.')
   })
 
   // scheduler: interval and active hours are read on every tick, so a change in Ayarlar applies without a restart
