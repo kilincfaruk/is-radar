@@ -126,8 +126,9 @@ ilanlar kalın + nokta ile, son turda gelenler "yeni" etiketiyle ayrılır.
 ```
 npm run init                                   ilk kurulum dosyaları
 npm run build                                  dashboard build (public/)
-npm run dev                                    dashboard watch build
-npm run serve                                  zamanlayıcı + web
+npm run dev                                    dashboard build + serve (git pull sonrası bunu çalıştır)
+npm run serve                                  zamanlayıcı + web (dashboard'u build etmez)
+npm run watch                                  dashboard kodu değiştirirken: değişince tekrar build
 npm run run      -- [--full|--incremental] [--max-searches N] [--pages N] [--details N] [--no-score] [--no-research] [--score-budget N]
 npm run score    -- [--limit N] [--include-rejects] [--top]
 npm run research -- [--min-score N] [--limit N]
